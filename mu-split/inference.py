@@ -52,24 +52,43 @@ def run_inference_sliding(model, train_dset, test_dset, dataset, ckpt_dir,
     save_dir = get_save_dir(results_root, dataset, ckpt_dir)
     raw_preds_dir = get_raw_preds_dir(save_dir, dataset, ckpt_dir)
 
-    # Save predictions one by one
-    with torch.no_grad():
-        global_idx = 0
-        for batch in tqdm(dloader, desc="Predicting tiles"):
-            inp, tar = batch
-            inp = inp.to(device)
-            rec, _ = model(inp)
-            rec = get_img_from_forward_output(rec, model)
-            rec_np = rec.cpu().numpy()
+    # Determine which tiles are already saved
+    total_tiles = len(test_dset)
+    existing_preds = set(f.name for f in raw_preds_dir.glob("pred_*.npy"))
+    missing_indices = [i for i in range(total_tiles) if f"pred_{i:06d}.npy" not in existing_preds]
 
-            # Save each prediction individually
-            for i in range(rec_np.shape[0]):
-                pred_path = raw_preds_dir / f"pred_{global_idx:06d}.npy"
-                if pred_path.exists():
+    if len(missing_indices) == 0:
+        print("All predictions already exist. Skipping model inference.")
+    else:
+        print(f"Predicting {len(missing_indices)} missing tiles out of {total_tiles}")
+
+        # Save predictions one by one
+        with torch.no_grad():
+            global_idx = 0
+            for batch in tqdm(dloader, desc="Predicting tiles"):
+                start_idx = global_idx
+                end_idx = global_idx + batch[0].shape[0]
+                batch_indices = range(start_idx, end_idx)
+                # Determine which indices in this batch are missing
+                batch_missing_mask = [idx in missing_indices for idx in batch_indices]
+                if not any(batch_missing_mask):
+                    global_idx += batch[0].shape[0]
+                    continue  # all tiles in this batch already exist
+
+                # Only compute predictions for missing tiles
+                inp, tar = batch
+                inp = inp.to(device)
+                rec, _ = model(inp)
+                rec = get_img_from_forward_output(rec, model)
+                rec_np = rec.cpu().numpy()
+
+                for i, missing in enumerate(batch_missing_mask):
+                    if not missing:
+                        global_idx += 1
+                        continue
+                    pred_path = raw_preds_dir / f"pred_{global_idx:06d}.npy"
+                    np.save(pred_path, rec_np[i])
                     global_idx += 1
-                    continue  # resume logic
-                np.save(pred_path, rec_np[i])
-                global_idx += 1
 
     # Load all saved predictions
     pred_files = sorted(raw_preds_dir.glob("pred_*.npy"))
@@ -90,7 +109,6 @@ def run_inference_sliding(model, train_dset, test_dset, dataset, ckpt_dir,
         dill.dump(stitched_predictions, f)
 
     print(f"Saved sliding-window predictions to {save_dir}")
-
 
 # %%
 def run_inference_original(model, train_dset, test_dset, dataset, ckpt_dir,
@@ -131,23 +149,63 @@ def run_inference_original(model, train_dset, test_dset, dataset, ckpt_dir,
 
 
 # %%
-if __name__ == "__main__":
-    # Setup
-    dataset_name = "Hagen"
-    lc_type = "LeanLC"
-    modality = "MitoVsAct"
-    sliding_window_flag = True  # change to False if you want original predictions
+import argparse
 
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Run LVAE inference")
+
+    # Required sweep args
+    parser.add_argument("--dataset", type=str, required=True,
+                        help="Dataset name (e.g. Hagen, PAVIA_ATN)")
+    parser.add_argument("--modality", type=str, required=True,
+                        help="Data modality (e.g. MitoVsAct, ActTub)")
+    parser.add_argument("--lc_type", type=str, required=True,
+                        help="LC type (e.g. LeanLC, DeepLC)")
+    parser.add_argument("--sliding_window_flag", action="store_true",
+                        help="Enable sliding-window inference (default: off)")
+
+    # Optional overrides
+    parser.add_argument("--results_root", type=str,
+                        default="/group/jug/aman/ConsolidatedResults/Results_usplit_64",
+                        help="Where to save results")
+    parser.add_argument("--batch_size", type=int, default=32,
+                        help="Batch size (used for sliding-window mode)")
+    parser.add_argument("--num_workers", type=int, default=6,
+                        help="Number of data loader workers")
+    parser.add_argument("--mmse_count", type=int, default=64,
+                        help="MMSE count (only for original mode)")
+    parser.add_argument("--grid_size", type=int, default=32,
+                        help="Grid size (only for original mode)")
+
+    args = parser.parse_args()
+
+    # ------------------------
+    # Setup
+    # ------------------------
     model, config, (train_dset, val_dset, test_dset), ckpt_dir = setup_environment(
-        dataset_name=dataset_name,
-        lc_type=lc_type,
-        modality=modality,
+        dataset_name=args.dataset,
+        lc_type=args.lc_type,
+        modality=args.modality,
         img_sz=64,
-        sliding_window_flag=sliding_window_flag
+        sliding_window_flag=args.sliding_window_flag
     )
 
+    # ------------------------
     # Run inference
-    if sliding_window_flag:
-        run_inference_sliding(model, train_dset, test_dset, dataset_name, ckpt_dir)
+    # ------------------------
+    if args.sliding_window_flag:
+        run_inference_sliding(
+            model, train_dset, test_dset, args.dataset, ckpt_dir,
+            batch_size=args.batch_size,
+            num_workers=args.num_workers,
+            results_root=args.results_root
+        )
     else:
-        run_inference_original(model, train_dset, test_dset, dataset_name, ckpt_dir)
+        run_inference_original(
+            model, train_dset, test_dset, args.dataset, ckpt_dir,
+            batch_size=args.batch_size * 5,
+            num_workers=args.num_workers,
+            mmse_count=args.mmse_count,
+            grid_size=args.grid_size,
+            results_root=args.results_root
+        )

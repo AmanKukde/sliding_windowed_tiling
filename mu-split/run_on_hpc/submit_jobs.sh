@@ -11,22 +11,32 @@ SLIDING=("off" "on")
 # Dataset-specific modalities
 declare -A MODALITIES
 MODALITIES["PAVIA_ATN"]="ActTub ActNuc TubNuc"
-MODALITIES["HAGEN"]="MitoVsAct"
+MODALITIES["Hagen"]="MitoVsAct"
 
 # HPC settings
 PARTITION="gpuq"
 GPUS=1
 MEM="64GB"
 CPUS=4
-TIME="24:00:00"
+TIME="36:00:00"
 
 # Paths (absolute)
 PROJECT_DIR="/home/aman.kukde/sliding_windowed_tiling/mu-split"
 PYTHON_BIN="/scratch/aman.kukde/conda/envs/msr/bin/python3.10"
 SCRIPT="${PROJECT_DIR}/inference.py"
-LOGDIR="${PROJECT_DIR}/logs"
 
+# ------------------------
+# Logs with datetime ID
+# ------------------------
+RUN_ID=$(date +"%Y-%m-%d_%H-%M-%S")   # timestamp with separators
+LOGDIR="${PROJECT_DIR}/logs/${RUN_ID}"
 mkdir -p "${LOGDIR}"
+
+# ------------------------
+# SBATCH file directory
+# ------------------------
+SBATCH_DIR="${PROJECT_DIR}/sbatch_files/${RUN_ID}"
+mkdir -p "${SBATCH_DIR}"
 
 # ------------------------
 # Job submission loop
@@ -40,8 +50,8 @@ for dataset in "${DATASETS[@]}"; do
         JOBNAME="inf_${dataset}_${modality}_${lc}_slide${slide}"
         LOGFILE="${LOGDIR}/${JOBNAME}.log"
 
-        # sbatch script filename
-        SBFILE="sbatch_${JOBNAME}.sh"
+        # sbatch script filename (inside timestamped folder)
+        SBFILE="${SBATCH_DIR}/sbatch_${JOBNAME}.sh"
 
         # ------------------------
         # Write SBATCH file

@@ -1,6 +1,6 @@
 #!/bin/bash
 #SBATCH --mail-type=NONE
-#SBATCH --output=/home/aman.kukde/sliding_windowed_tiling/mu-split/logs/20250928_160118/inf_PAVIA_ATN_ActTub_LeanLC_slideoff.log
+#SBATCH --output=/home/aman.kukde/sliding_windowed_tiling/mu-split/logs/2025-09-29_13-38-31/inf_PAVIA_ATN_ActTub_LeanLC_slideoff.log
 #SBATCH --partition=gpuq
 #SBATCH --nodes=1
 #SBATCH --gres=gpu:1
@@ -8,7 +8,7 @@
 #SBATCH --ntasks-per-node=1
 #SBATCH --cpus-per-task=4
 #SBATCH --job-name=inf_PAVIA_ATN_ActTub_LeanLC_slideoff
-#SBATCH --time=24:00:00
+#SBATCH --time=36:00:00
 
 cd /home/aman.kukde/sliding_windowed_tiling/mu-split
 

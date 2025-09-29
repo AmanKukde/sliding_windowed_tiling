@@ -1,6 +1,6 @@
 #!/bin/bash
 #SBATCH --mail-type=NONE
-#SBATCH --output=/home/aman.kukde/sliding_windowed_tiling/mu-split/logs/inf_PAVIA_ATN_TubNuc_DeepLC_slideoff.log
+#SBATCH --output=/home/aman.kukde/sliding_windowed_tiling/mu-split/logs/2025-09-29_12-07-31/inf_PAVIA_ATN_TubNuc_DeepLC_slideoff.log
 #SBATCH --partition=gpuq
 #SBATCH --nodes=1
 #SBATCH --gres=gpu:1
