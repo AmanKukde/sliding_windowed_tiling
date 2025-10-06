@@ -3,13 +3,14 @@ import os
 from pathlib import Path
 import glob
 import dill
+import shutil
 import numpy as np
 from tqdm import tqdm
 from torch.utils.data import DataLoader
 import torch
 
 from train_setup import setup_environment, get_best_checkpoint  # your fixed setup
-from careamics.lvae_training.eval_utils import get_device, stitch_and_crop_predictions_inner_tile, get_predictions
+from careamics.lvae_training.eval_utils import get_device, stitch_and_crop_predictions_inner_tile, get_predictions, stitch_and_crop_predictions_inner_tile_from_dir
 from usplit.core.tiff_reader import save_tiff
 from usplit.analysis.lvae_utils import get_img_from_forward_output
 
@@ -37,78 +38,47 @@ def get_raw_preds_dir(save_dir, dataset, ckpt_dir):
     return raw_dir
 
 
-# %%
-def run_inference_sliding(model, train_dset, test_dset, dataset, ckpt_dir,
-                          batch_size=32, num_workers=6,
-                          results_root="/group/jug/aman/ConsolidatedResults/Results_usplit_64"):
-
-    device = get_device()
-    dloader = DataLoader(test_dset, pin_memory=True, num_workers=num_workers,
-                         shuffle=False, batch_size=batch_size*15)
-
+def run_inference_sliding(model, test_dset, save_dir,
+                             batch_size=32, num_workers=4):
+    """
+    Run model inference on the test dataset, predict all tiles, and save them as .npy files.
+    Does NOT check for existing predictions and does NOT stitch.
+    
+    Args:
+        model: PyTorch model
+        test_dset: Dataset for inference
+        save_dir: Directory to save predictions (will be created if doesn't exist)
+        batch_size: Batch size for DataLoader
+        num_workers: Number of workers for DataLoader
+    """
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model.eval().to(device)
+    
+    save_dir = Path(save_dir)
+    shutil.rmtree(save_dir, ignore_errors=True)  # deletes folder and all files
+    save_dir.mkdir(parents=True, exist_ok=True)
 
-    # Raw predictions folder
-    save_dir = get_save_dir(results_root, dataset, ckpt_dir)
-    raw_preds_dir = get_raw_preds_dir(save_dir, dataset, ckpt_dir)
 
-    # Determine which tiles are already saved
-    total_tiles = len(test_dset)
-    existing_preds = set(f.name for f in raw_preds_dir.glob("pred_*.npy"))
-    missing_indices = [i for i in range(total_tiles) if f"pred_{i:06d}.npy" not in existing_preds]
+    dloader = DataLoader(test_dset, pin_memory=True, num_workers=num_workers,
+                         shuffle=False, batch_size=batch_size)
+    
+    global_idx = 0
+    with torch.no_grad():
+        for batch in tqdm(dloader, desc="Predicting tiles"):
+            inp = batch[0].to(device)
+            rec, _ = model(inp)
+            
+            # Convert model output to image (implement get_img_from_forward_output as needed)
+            rec = get_img_from_forward_output(rec, model)
+            rec_np = rec.cpu().numpy()  # shape: (batch_size, C, H, W)
+            
+            for i in range(rec_np.shape[0]):
+                pred_path = save_dir / f"pred_{global_idx:010d}.npy"
+                np.save(pred_path, rec_np[i])
+                global_idx += 1
+                
+    print(f"✅ Saved {global_idx} prediction tiles to {save_dir}")
 
-    if len(missing_indices) == 0:
-        print("All predictions already exist. Skipping model inference.")
-    else:
-        print(f"Predicting {len(missing_indices)} missing tiles out of {total_tiles}")
-
-        # Save predictions one by one
-        with torch.no_grad():
-            global_idx = 0
-            for batch in tqdm(dloader, desc="Predicting tiles"):
-                start_idx = global_idx
-                end_idx = global_idx + batch[0].shape[0]
-                batch_indices = range(start_idx, end_idx)
-                # Determine which indices in this batch are missing
-                batch_missing_mask = [idx in missing_indices for idx in batch_indices]
-                if not any(batch_missing_mask):
-                    global_idx += batch[0].shape[0]
-                    continue  # all tiles in this batch already exist
-
-                # Only compute predictions for missing tiles
-                inp, tar = batch
-                inp = inp.to(device)
-                rec, _ = model(inp)
-                rec = get_img_from_forward_output(rec, model)
-                rec_np = rec.cpu().numpy()
-
-                for i, missing in enumerate(batch_missing_mask):
-                    if not missing:
-                        global_idx += 1
-                        continue
-                    pred_path = raw_preds_dir / f"pred_{global_idx:06d}.npy"
-                    np.save(pred_path, rec_np[i])
-                    global_idx += 1
-
-    # Load all saved predictions
-    pred_files = sorted(raw_preds_dir.glob("pred_*.npy"))
-    tiles_arr = np.stack([np.load(f) for f in pred_files], axis=0)
-    print(f"Loaded {len(tiles_arr)} predictions from {raw_preds_dir}")
-
-    # Stitch
-    stitched_predictions, _ = stitch_and_crop_predictions_inner_tile(tiles_arr, test_dset)
-
-    # Unnormalize
-    mean_params, std_params = train_dset.get_mean_std()
-    stitched_predictions = stitched_predictions * std_params["target"].squeeze().reshape(1, 1, 1, -1) + \
-                           mean_params["target"].squeeze().reshape(1, 1, 1, -1)
-
-    # Save final stitched output
-    save_tiff(save_dir / "pred_test_dset_usplit_windowed.tiff", stitched_predictions.transpose(0,3,1,2))
-    with open(save_dir / "pred_test_dset_usplit_windowed.pkl", "wb") as f:
-        dill.dump(stitched_predictions, f)
-
-    print(f"Saved sliding-window predictions to {save_dir}")
 
 # %%
 def run_inference_original(model, train_dset, test_dset, dataset, ckpt_dir,
@@ -147,6 +117,63 @@ def run_inference_original(model, train_dset, test_dset, dataset, ckpt_dir,
 
     print(f"Saved original predictions to {save_dir}")
 
+def stitch_predictions_from_dir_only(train_dset, test_dset, dataset, ckpt_dir,
+                                     results_root="/group/jug/aman/ConsolidatedResults/Results_usplit_64",
+                                     pred_dir_name=None,
+                                     use_memmap=True,
+                                     digits=7,
+                                     max_gap=100):
+    """
+    Load existing raw predictions from a directory and stitch them into final output
+    without performing model inference.
+
+    Args:
+        train_dset: Training dataset (for mean/std unnormalization)
+        test_dset: Test dataset (for patch info)
+        dataset: Dataset name
+        ckpt_dir: Checkpoint directory name (used to locate results)
+        results_root: Root folder for results
+        pred_dir_name: If None, automatically uses standard raw_predictions folder
+        use_memmap: Whether to use disk-backed accumulation (for very large images)
+        digits: Number of zero-padded digits in filenames (e.g., 6 for pred_000001.npy)
+        max_gap: Max consecutive missing files before stopping search
+    """
+
+    # Determine directories
+    save_dir = get_save_dir(results_root, dataset, ckpt_dir)
+    if pred_dir_name is None:
+        raw_preds_dir = get_raw_preds_dir(save_dir, dataset, ckpt_dir)
+    else:
+        raw_preds_dir = Path(pred_dir_name)
+    raw_preds_dir.mkdir(exist_ok=True, parents=True)
+
+    print(f"📂 Reading raw predictions from: {raw_preds_dir}")
+
+    # Stitch using memory-efficient function
+    stitched_predictions, counts = stitch_and_crop_predictions_inner_tile_from_dir(
+        pred_dir=raw_preds_dir,
+        dset=test_dset,
+        num_workers=4,
+        inner_fraction=0.5,
+        batch_size=128,
+        digits=digits,
+        max_gap=max_gap,
+        use_memmap=use_memmap
+    )
+
+    # Unnormalize using training dataset stats
+    mean_params, std_params = train_dset.get_mean_std()
+    target_mean = mean_params["target"].squeeze().reshape(1, 1, 1, -1)
+    target_std = std_params["target"].squeeze().reshape(1, 1, 1, -1)
+    stitched_predictions = stitched_predictions * target_std + target_mean
+
+    # Save final stitched outputs
+    save_tiff(save_dir / "pred_test_dset_stitched.tiff", stitched_predictions.transpose(0, 3, 1, 2))
+    with open(save_dir / "pred_test_dset_stitched.pkl", "wb") as f:
+        dill.dump(stitched_predictions, f)
+
+    print(f"✅ Saved stitched predictions to {save_dir}")
+    return stitched_predictions
 
 # %%
 import argparse
@@ -163,14 +190,15 @@ if __name__ == "__main__":
                         help="LC type (e.g. LeanLC, DeepLC)")
     parser.add_argument("--sliding_window_flag", action="store_true",
                         help="Enable sliding-window inference (default: off)")
-
+    parser.add_argument("--stitch_only", action="store_true",
+                        help="Enable sliding-window inference (default: off)")
     # Optional overrides
     parser.add_argument("--results_root", type=str,
                         default="/group/jug/aman/ConsolidatedResults/Results_usplit_64",
                         help="Where to save results")
-    parser.add_argument("--batch_size", type=int, default=32,
+    parser.add_argument("--batch_size", type=int, default=16,
                         help="Batch size (used for sliding-window mode)")
-    parser.add_argument("--num_workers", type=int, default=6,
+    parser.add_argument("--num_workers", type=int, default=4,
                         help="Number of data loader workers")
     parser.add_argument("--mmse_count", type=int, default=64,
                         help="MMSE count (only for original mode)")
@@ -194,12 +222,20 @@ if __name__ == "__main__":
     # Run inference
     # ------------------------
     if args.sliding_window_flag:
-        run_inference_sliding(
-            model, train_dset, test_dset, args.dataset, ckpt_dir,
-            batch_size=args.batch_size,
-            num_workers=args.num_workers,
-            results_root=args.results_root
-        )
+        if args.stitch_only:
+            stitch_predictions_from_dir_only(train_dset, test_dset, args.dataset, ckpt_dir,
+                                     results_root="/group/jug/aman/ConsolidatedResults/Results_usplit_64",
+                                     pred_dir_name=None,
+                                     use_memmap=True,
+                                     digits=7,
+                                     max_gap=100)
+        else:
+            run_inference_sliding(
+                model, train_dset, test_dset, args.dataset, ckpt_dir,
+                batch_size=args.batch_size,
+                num_workers=args.num_workers,
+                results_root=args.results_root
+            )
     else:
         run_inference_original(
             model, train_dset, test_dset, args.dataset, ckpt_dir,

@@ -44,7 +44,7 @@ def setup_environment(dataset_name="Hagen", lc_type="LeanLC", modality="MitoVsAc
     NM_PATH = Path("./noise_models/")
 
     # Data configs
-    multiscale_lowres_count = 5 if lc_type == "LeanLC" else 8
+    multiscale_lowres_count = 5
     train_data_config, val_data_config, test_data_config = get_data_configs(
         image_size=(img_sz, img_sz),
         num_channels=2,
@@ -136,6 +136,21 @@ def setup_environment(dataset_name="Hagen", lc_type="LeanLC", modality="MitoVsAc
             config.model.init_channel_count = 64
         if 'skip_receptive_field_loss_tokens' not in config.loss:
             config.loss.skip_receptive_field_loss_tokens = []
+
+
+
+    if lc_type =="regularLC":
+        config.model.z_dims = [128, 128, 128, 128]
+        config.model.multiscale_retain_spatial_dims = True
+        config.model.decoder.multiscale_retain_spatial_dims = True
+    elif lc_type == "LeanLC":
+        config.model.z_dims = [128, 128, 128, 128]
+        config.model.multiscale_retain_spatial_dims = False
+        config.model.decoder.multiscale_retain_spatial_dims = False
+    elif lc_type == "DeepLC":
+        config.model.z_dims = [128, 128, 128, 128, 128, 128, 128, 128]
+        config.model.multiscale_retain_spatial_dims = True
+        config.model.decoder.multiscale_retain_spatial_dims = True
 
     # Compute mean/std for normalization
     if config.data.target_separate_normalization:
