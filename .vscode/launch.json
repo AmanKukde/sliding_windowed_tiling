@@ -1,0 +1,53 @@
+{
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Python Debugger: Current File",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${file}",
+            "console": "integratedTerminal"
+        },
+        {
+            "name": "LVAE Inference — Sliding Window",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/mu-split/inference.py",
+            "cwd": "${workspaceFolder}/mu-split",
+            "console": "integratedTerminal",
+            "justMyCode": false,
+            "python": "/localscratch/conda/envs/msr/bin/python3.10",
+            "args": [
+                "--dataset", "PAVIA_ATN",
+                "--modality", "ActNuc",
+                "--lc_type", "DeepLC",
+                "--sliding_window_flag",
+                "--results_root", "/group/jug/aman/Results_06Oct25/Results_usplit_64",
+                "--batch_size", "64"
+            ]
+        },
+        {
+            "name": "LVAE Inference — Stitch Only",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/mu-split/inference.py",
+            "cwd": "${workspaceFolder}/mu-split",
+            "console": "integratedTerminal",
+            "justMyCode": false,
+            "python": "/localscratch/conda/envs/msr/bin/python3.10",
+            "args": [
+                "--dataset", "PAVIA_ATN",
+                "--modality", "ActNuc",
+                "--lc_type", "DeepLC",
+                "--sliding_window_flag",
+                "--stitch_only",
+                "--results_root", "/group/jug/aman/Results_06Oct25/Results_usplit_64",
+                "--batch_size", "64",
+                "--raw_preds_dir", "/group/jug/aman/Results_06Oct25/Results_usplit_64/PAVIA_ATN/ActNuc/LeanLC"
+            ]
+        }
+    ]
+}

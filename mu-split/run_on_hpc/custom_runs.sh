@@ -23,6 +23,8 @@ TIME="36:00:00"
 # Paths (absolute)
 PROJECT_DIR="/home/aman.kukde/sliding_windowed_tiling/mu-split"
 PYTHON_BIN="/scratch/aman.kukde/conda/envs/msr/bin/python3.10"
+RESULTS_FOLDER="/group/jug/aman/Results_06Oct25/Results_usplit_64"
+BATCH_SIZE=64
 SCRIPT="${PROJECT_DIR}/inference.py"
 
 # ------------------------
@@ -73,9 +75,10 @@ cd ${PROJECT_DIR}
 
 # Run inference
 if [ "${slide}" == "on" ]; then
-  ${PYTHON_BIN} ${SCRIPT} --dataset ${dataset} --modality ${modality} --lc_type ${lc} --sliding_window_flag
+  ${PYTHON_BIN} ${SCRIPT} --dataset ${dataset} --modality ${modality} --lc_type ${lc} --sliding_window_flag --results_root ${RESULTS_FOLDER} --batch_size ${BATCH_SIZE}
+
 else
-  ${PYTHON_BIN} ${SCRIPT} --dataset ${dataset} --modality ${modality} --lc_type ${lc}
+  ${PYTHON_BIN} ${SCRIPT} --dataset ${dataset} --modality ${modality} --lc_type ${lc} --results_root ${RESULTS_FOLDER} --batch_size ${BATCH_SIZE}
 fi
 EOL
 

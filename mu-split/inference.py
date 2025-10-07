@@ -37,54 +37,13 @@ def get_raw_preds_dir(save_dir, dataset, ckpt_dir):
     raw_dir.mkdir(parents=True, exist_ok=True)
     return raw_dir
 
-
-def run_inference_sliding(model, test_dset, save_dir,
-                             batch_size=32, num_workers=4):
-    """
-    Run model inference on the test dataset, predict all tiles, and save them as .npy files.
-    Does NOT check for existing predictions and does NOT stitch.
-    
-    Args:
-        model: PyTorch model
-        test_dset: Dataset for inference
-        save_dir: Directory to save predictions (will be created if doesn't exist)
-        batch_size: Batch size for DataLoader
-        num_workers: Number of workers for DataLoader
-    """
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    model.eval().to(device)
-    
-    save_dir = Path(save_dir)
-    shutil.rmtree(save_dir, ignore_errors=True)  # deletes folder and all files
-    save_dir.mkdir(parents=True, exist_ok=True)
-
-
-    dloader = DataLoader(test_dset, pin_memory=True, num_workers=num_workers,
-                         shuffle=False, batch_size=batch_size)
-    
-    global_idx = 0
-    with torch.no_grad():
-        for batch in tqdm(dloader, desc="Predicting tiles"):
-            inp = batch[0].to(device)
-            rec, _ = model(inp)
-            
-            # Convert model output to image (implement get_img_from_forward_output as needed)
-            rec = get_img_from_forward_output(rec, model)
-            rec_np = rec.cpu().numpy()  # shape: (batch_size, C, H, W)
-            
-            for i in range(rec_np.shape[0]):
-                pred_path = save_dir / f"pred_{global_idx:010d}.npy"
-                np.save(pred_path, rec_np[i])
-                global_idx += 1
-                
-    print(f"✅ Saved {global_idx} prediction tiles to {save_dir}")
-
+import subprocess
 
 # %%
 def run_inference_original(model, train_dset, test_dset, dataset, ckpt_dir,
                            batch_size=128*5, num_workers=6, mmse_count=64, grid_size=32,
                            results_root="/group/jug/aman/ConsolidatedResults/Results_usplit_64"):
-
+    print("Initialising")
     stitched_predictions_, stitched_stds_ = get_predictions(
         model=model,
         dset=test_dset,
@@ -117,11 +76,60 @@ def run_inference_original(model, train_dset, test_dset, dataset, ckpt_dir,
 
     print(f"Saved original predictions to {save_dir}")
 
+
+def fast_delete(save_dir):
+    subprocess.run(["rm", "-rf", save_dir], check=True)
+
+
+def run_inference_sliding(model, test_dset,dataset,ckpt_dir,results_root,
+                        batch_size=32, num_workers=4 ):
+    """
+    Run model inference on the test dataset, predict all tiles, and save them as .npy files.
+    Does NOT check for existing predictions and does NOT stitch.
+    
+    Args:
+        model: PyTorch model
+        test_dset: Dataset for inference
+        save_dir: Directory to save predictions (will be created if doesn't exist)
+        batch_size: Batch size for DataLoader
+        num_workers: Number of workers for DataLoader
+    """
+    print("Initialising")
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    model.eval().to(device)
+    save_dir = get_save_dir(results_root, dataset, ckpt_dir)
+    save_dir = Path(save_dir)
+    fast_delete(save_dir)  # deletes folder and all files
+    save_dir.mkdir(parents=True, exist_ok=True)
+
+    print("Loading Dataloader")
+    dloader = DataLoader(test_dset, pin_memory=True, num_workers=num_workers,
+                         shuffle=False, batch_size=batch_size)
+    print("Predicting now....")
+    global_idx = 0
+    with torch.no_grad():
+        for batch in tqdm(dloader, desc="Predicting tiles"):
+            inp = batch[0].to(device)
+            rec, _ = model(inp)
+            # Convert model output to image (implement get_img_from_forward_output as needed)
+            rec = get_img_from_forward_output(rec, model)
+            rec_np = rec.cpu().numpy()  # shape: (batch_size, C, H, W)
+            
+            for i in range(rec_np.shape[0]):
+                raw_pred_path = get_raw_preds_dir(save_dir, dataset, ckpt_dir)
+                pred_path =  raw_pred_path / f"pred_{global_idx:010d}.npy"
+                np.save(pred_path, rec_np[i])
+                global_idx += 1
+                
+    print(f"✅ Saved {global_idx} prediction tiles to {save_dir}")
+
+
+
 def stitch_predictions_from_dir_only(train_dset, test_dset, dataset, ckpt_dir,
-                                     results_root="/group/jug/aman/ConsolidatedResults/Results_usplit_64",
+                                     results_root,
                                      pred_dir_name=None,
                                      use_memmap=True,
-                                     digits=7,
+                                     digits=10,
                                      max_gap=100):
     """
     Load existing raw predictions from a directory and stitch them into final output
@@ -196,6 +204,9 @@ if __name__ == "__main__":
     parser.add_argument("--results_root", type=str,
                         default="/group/jug/aman/ConsolidatedResults/Results_usplit_64",
                         help="Where to save results")
+    parser.add_argument("--raw_preds_dir", type=str,
+                        default="",
+                        help="Where are the raw predictions")
     parser.add_argument("--batch_size", type=int, default=16,
                         help="Batch size (used for sliding-window mode)")
     parser.add_argument("--num_workers", type=int, default=4,
@@ -223,20 +234,21 @@ if __name__ == "__main__":
     # ------------------------
     if args.sliding_window_flag:
         if args.stitch_only:
-            stitch_predictions_from_dir_only(train_dset, test_dset, args.dataset, ckpt_dir,
-                                     results_root="/group/jug/aman/ConsolidatedResults/Results_usplit_64",
-                                     pred_dir_name=None,
+            print("Running Stitching Only")
+            stitch_predictions_from_dir_only(train_dset, test_dset, args.dataset, ckpt_dir,results_root=args.results_root,
+                                     pred_dir_name=args.raw_preds_dir,
                                      use_memmap=True,
-                                     digits=7,
                                      max_gap=100)
         else:
+            print("Running Inference Sliding")
             run_inference_sliding(
-                model, train_dset, test_dset, args.dataset, ckpt_dir,
+                model,test_dset,args.dataset, ckpt_dir,
                 batch_size=args.batch_size,
                 num_workers=args.num_workers,
                 results_root=args.results_root
             )
     else:
+        print("Running Inference Original")
         run_inference_original(
             model, train_dset, test_dset, args.dataset, ckpt_dir,
             batch_size=args.batch_size * 5,

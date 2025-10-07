@@ -137,8 +137,6 @@ def setup_environment(dataset_name="Hagen", lc_type="LeanLC", modality="MitoVsAc
         if 'skip_receptive_field_loss_tokens' not in config.loss:
             config.loss.skip_receptive_field_loss_tokens = []
 
-
-
     if lc_type =="regularLC":
         config.model.z_dims = [128, 128, 128, 128]
         config.model.multiscale_retain_spatial_dims = True
