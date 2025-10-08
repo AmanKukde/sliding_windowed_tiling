@@ -8,7 +8,7 @@ import numpy as np
 from tqdm import tqdm
 from torch.utils.data import DataLoader
 import torch
-
+import subprocess
 from train_setup import setup_environment, get_best_checkpoint  # your fixed setup
 from careamics.lvae_training.eval_utils import get_device, stitch_and_crop_predictions_inner_tile, get_predictions, stitch_and_crop_predictions_inner_tile_from_dir
 from usplit.core.tiff_reader import save_tiff
@@ -33,11 +33,11 @@ def get_raw_preds_dir(save_dir, dataset, ckpt_dir):
     """
     parts = Path(ckpt_dir).parts
     modality, lctype = parts[-2], parts[-1]
-    raw_dir = save_dir / f"raw_predictions_{dataset}_{modality}_{lctype}_predid"
+    raw_dir = save_dir / f"{dataset}/{modality}/{lctype}/"
     raw_dir.mkdir(parents=True, exist_ok=True)
     return raw_dir
 
-import subprocess
+
 
 # %%
 def run_inference_original(model, train_dset, test_dset, dataset, ckpt_dir,
@@ -130,7 +130,7 @@ def stitch_predictions_from_dir_only(train_dset, test_dset, dataset, ckpt_dir,
                                      pred_dir_name=None,
                                      use_memmap=True,
                                      digits=10,
-                                     max_gap=100):
+                                     batch_size = 64):
     """
     Load existing raw predictions from a directory and stitch them into final output
     without performing model inference.
@@ -156,16 +156,19 @@ def stitch_predictions_from_dir_only(train_dset, test_dset, dataset, ckpt_dir,
     raw_preds_dir.mkdir(exist_ok=True, parents=True)
 
     print(f"📂 Reading raw predictions from: {raw_preds_dir}")
-
-    # Stitch using memory-efficient function
+    if dataset == "Hagen":
+        num_patches = 2470090
+    elif dataset == "PAVIA_ATN":
+        num_patches = 2653350
+        # Stitch using memory-efficient function
     stitched_predictions, counts = stitch_and_crop_predictions_inner_tile_from_dir(
         pred_dir=raw_preds_dir,
         dset=test_dset,
-        num_workers=4,
+        num_workers=6,
         inner_fraction=0.5,
-        batch_size=128,
+        batch_size=batch_size,
         digits=digits,
-        max_gap=max_gap,
+        num_patches=num_patches,
         use_memmap=use_memmap
     )
 
@@ -238,7 +241,7 @@ if __name__ == "__main__":
             stitch_predictions_from_dir_only(train_dset, test_dset, args.dataset, ckpt_dir,results_root=args.results_root,
                                      pred_dir_name=args.raw_preds_dir,
                                      use_memmap=True,
-                                     max_gap=100)
+                                     batch_size=args.batch_size)
         else:
             print("Running Inference Sliding")
             run_inference_sliding(
