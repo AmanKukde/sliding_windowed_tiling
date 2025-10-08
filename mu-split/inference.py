@@ -33,7 +33,7 @@ def get_raw_preds_dir(save_dir, dataset, ckpt_dir):
     """
     parts = Path(ckpt_dir).parts
     modality, lctype = parts[-2], parts[-1]
-    raw_dir = save_dir / f"{dataset}/{modality}/{lctype}/"
+    raw_dir = save_dir / f"raw_predictions_{dataset}_{modality}_{lctype}_predid"
     raw_dir.mkdir(parents=True, exist_ok=True)
     return raw_dir
 
@@ -99,7 +99,7 @@ def run_inference_sliding(model, test_dset,dataset,ckpt_dir,results_root,
     model.eval().to(device)
     save_dir = get_save_dir(results_root, dataset, ckpt_dir)
     save_dir = Path(save_dir)
-    fast_delete(save_dir)  # deletes folder and all files
+    # fast_delete(save_dir)  # deletes folder and all files 
     save_dir.mkdir(parents=True, exist_ok=True)
 
     print("Loading Dataloader")
@@ -150,7 +150,7 @@ def stitch_predictions_from_dir_only(train_dset, test_dset, dataset, ckpt_dir,
     # Determine directories
     save_dir = get_save_dir(results_root, dataset, ckpt_dir)
     if pred_dir_name is None:
-        raw_preds_dir = get_raw_preds_dir(save_dir, dataset, ckpt_dir)
+        raw_preds_dir = save_dir#get_raw_preds_dir(save_dir, dataset, ckpt_dir)
     else:
         raw_preds_dir = Path(pred_dir_name)
     raw_preds_dir.mkdir(exist_ok=True, parents=True)
@@ -208,7 +208,7 @@ if __name__ == "__main__":
                         default="/group/jug/aman/ConsolidatedResults/Results_usplit_64",
                         help="Where to save results")
     parser.add_argument("--raw_preds_dir", type=str,
-                        default="",
+                        default=None,
                         help="Where are the raw predictions")
     parser.add_argument("--batch_size", type=int, default=16,
                         help="Batch size (used for sliding-window mode)")

@@ -46,7 +46,7 @@
                 "--stitch_only",
                 "--results_root", "/group/jug/aman/Results_06Oct25/Results_usplit_64",
                 "--batch_size", "128",
-                "--raw_preds_dir", "/group/jug/aman/Results_06Oct25/Results_usplit_64/PAVIA_ATN/ActNuc/LeanLC"
+                // "--raw_preds_dir", "/group/jug/aman/Results_06Oct25/Results_usplit_64/PAVIA_ATN/ActNuc/LeanLC"
             ]
         }
     ]
