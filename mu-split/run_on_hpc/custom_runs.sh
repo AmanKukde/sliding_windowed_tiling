@@ -24,7 +24,7 @@ TIME="36:00:00"
 PROJECT_DIR="/home/aman.kukde/sliding_windowed_tiling/mu-split"
 PYTHON_BIN="/scratch/aman.kukde/conda/envs/msr/bin/python3.10"
 RESULTS_FOLDER="/group/jug/aman/Results_06Oct25/Results_usplit_64"
-BATCH_SIZE=2048*2
+BATCH_SIZE=5096
 SCRIPT="${PROJECT_DIR}/inference.py"
 
 # ------------------------
