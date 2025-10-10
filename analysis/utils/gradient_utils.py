@@ -19,7 +19,7 @@ class GradientUtils:
         self.tile_size = tile_size
         self.border_size = border_size if border_size is not None else tile_size // 2
 
-        # remove borders
+        # remove border artefacts
         self.imgs_without_borders = GradientUtils.border_free(self.imgs, self.border_size)
 
         # gradients
@@ -36,13 +36,25 @@ class GradientUtils:
                 [self.gradients_x, self.gradients_y, self.gradients_edges, self.gradients_middle],
                 num_bins=200
             )
+        
         # histograms
+        self.histogram_edges = GradientUtils.compute_histograms(self.gradients_edges, self._bin_edges)
+        self.histogram_middle = GradientUtils.compute_histograms(self.gradients_middle, self._bin_edges)
+    
+    # FIXED: Added method to create bin edges (was missing!)
+    def make_bin_edges(self, n_bins=2000):
+        """Create bin edges from the gradient data."""
+        return GradientUtils.get_bin_edges(
+            [self.gradients_x, self.gradients_y, self.gradients_edges, self.gradients_middle],
+            num_bins=n_bins
+        )
+        
     @staticmethod
-    def compute_histograms(gradients: np.ndarray,bin_edges: np.ndarray):
+    def compute_histograms(gradients: np.ndarray, bin_edges: np.ndarray):
         """
-        Compute histogramsgradients.
+        Compute histograms for gradients.
         Args:
-            gradients(numpy array): gradients
+            gradients (numpy array): gradients
             bin_edges (numpy array): edges of the histogram bins.
         Returns:
             histograms (tuple): histograms for edges and middle gradients.
@@ -71,7 +83,7 @@ class GradientUtils:
 
     @staticmethod
     def wiener_entropy(hist: np.ndarray, eps=1e-12):
-        """Compute Wiener entropy for the histogram."""
+        """Compute Wiener entropy for the histogram.(not flattened array)"""
         w = np.hanning(len(hist))
         X = np.fft.rfft(hist * w)
         P = np.abs(X) ** 2 + eps
@@ -98,7 +110,7 @@ class GradientUtils:
 
     def get_gradients_at(self, position="edge", channels=None):
         """
-        Get gradients sampled at specific tile positions.
+        Get collection of absolute gradients sampled at specific tile positions.
 
         position: "edge", "middle", or int (tile offset)
         channels: int, list/tuple of ints, or None (all channels)
@@ -120,13 +132,11 @@ class GradientUtils:
 
 
 
-    def get_peakiness_scores(self, eps=1e-12):
+    def get_peakiness_scores(self, histogram_edges, histogram_middle, eps=1e-12):
         """Compute peakiness scores using Wiener entropy."""
         scores = []
-        for x in [self.histogram_edges,
-                  self.histogram_middle,
-                  self.histogram_middle - self.histogram_edges]:
+        for x in [histogram_edges,
+                  histogram_middle,
+                  histogram_middle - histogram_edges]:
             scores.append(GradientUtils.wiener_entropy(x, eps=eps))
         return scores
-
-

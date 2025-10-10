@@ -6,7 +6,7 @@ set -e
 # ------------------------
 DATASETS=("PAVIA_ATN" "Hagen")
 LC_TYPES=("LeanLC" "DeepLC")
-SLIDING=("on")
+SLIDING=("off")
 
 # Dataset-specific modalities
 declare -A MODALITIES
@@ -23,8 +23,8 @@ TIME="36:00:00"
 # Paths (absolute)
 PROJECT_DIR="/home/aman.kukde/sliding_windowed_tiling/mu-split"
 PYTHON_BIN="/scratch/aman.kukde/conda/envs/msr/bin/python3.10"
-RESULTS_FOLDER="/group/jug/aman/Results_06Oct25/Results_usplit_64"
-BATCH_SIZE=5096
+RESULTS_FOLDER="/group/jug/aman/ConsolidatedResults/Results_usplit_64"
+BATCH_SIZE=64
 SCRIPT="${PROJECT_DIR}/inference.py"
 
 # ------------------------

@@ -48,6 +48,23 @@
                 "--batch_size", "128",
                 // "--raw_preds_dir", "/group/jug/aman/Results_06Oct25/Results_usplit_64/PAVIA_ATN/ActNuc/LeanLC"
             ]
+        },
+        {
+            "name": "Analyze Gradients",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "/home/aman.kukde/sliding_windowed_tiling/analysis/analyze_gradients.py",
+            "console": "integratedTerminal",
+            "args": [
+                "--sw_path", "/group/jug/aman/usplit-results/Hagen/MitoVsAct/LeanLC/pred_test_dset_stitched.pkl",
+                "--og_path", "/group/jug/aman/usplit-results/Hagen/MitoVsAct/LeanLC/pred_test_dset_usplit_og.pkl",
+                "--save_dir", "gradient_analysis_results_local/Hagen/MitoVsAct/LeanLC",
+                "--tile_size", "32",
+                "--bins", "2000",
+                "--channel", "1",
+                "--kl_start", "29",
+                "--kl_end", "33"
+            ],
         }
     ]
 }

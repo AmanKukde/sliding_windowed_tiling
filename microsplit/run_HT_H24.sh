@@ -4,13 +4,13 @@
 #SBATCH --partition=gpuq
 #SBATCH --nodes=1
 #SBATCH --gres=gpu:1
-#SBATCH --mem=64GB
+#SBATCH --mem=256GB
 #SBATCH --ntasks-per-node=1
 #SBATCH --cpus-per-task=4
 #SBATCH --job-name=MSR-notebooks-3D-HT_H24
 #SBATCH --time=36:00:00
 
-cd /group/jug/aman/microsplit-runs/
+cd /group/jug/aman/microsplit-runs/HT_H24
 conda source microsplit
 
 # Run inference
