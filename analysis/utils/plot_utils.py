@@ -200,114 +200,39 @@ def plot_avg_psnr_zoomed(avg_df,save_dir):
     plt.savefig(save_dir / 'Zoomed_Avg_PSNR_Comparison.png', dpi=300)
     # plt.show()
 
-def plot_all_psnr(avg_df, n_samples=6,save_dir=None):
-    t_crit = t.ppf(0.975, df=n_samples-1)
-    ci_og = avg_df['SE_OG'] * t_crit
-    ci_win = avg_df['SE_WIN'] * t_crit
+def plot_all_psnr(avg_df, n_samples=6, save_dir=None):
+    t_crit = t.ppf(0.975, df=n_samples - 1)
+
+    # Safely get SE columns or fill with zeros if missing
+    ci_og = avg_df.get('SE_OG', np.zeros(len(avg_df))) * t_crit
+    ci_win = avg_df.get('SE_WIN', np.zeros(len(avg_df))) * t_crit
 
     x = np.arange(len(avg_df))
     fig, axs = plt.subplots(2, 1, figsize=(5, 10))
+
+    # Paired line plot
     for i in x:
-        axs[0].plot([0, 1], [avg_df['Avg_PSNR_OG'][i], avg_df['Avg_PSNR_WIN'][i]], marker='o', linewidth=2)
+        axs[0].plot([0, 1],
+                    [avg_df['Avg_PSNR_OG'][i], avg_df['Avg_PSNR_WIN'][i]],
+                    marker='o', linewidth=2)
     axs[0].set_xticks([0, 1])
     axs[0].set_xticklabels(['OG', 'WIN'])
     axs[0].set_ylabel('Avg PSNR')
     axs[0].set_title('Paired Line Plot (OG vs WIN)')
     axs[0].grid(True, axis='y')
 
+    # Error bar plot
     axs[1].errorbar(x - 0.05, avg_df['Avg_PSNR_OG'], yerr=ci_og, fmt='o', capsize=5, label='OG')
     axs[1].errorbar(x + 0.05, avg_df['Avg_PSNR_WIN'], yerr=ci_win, fmt='o', capsize=5, label='WIN')
     axs[1].set_xticks(x)
-    axs[1].set_xticklabels(avg_df['Channel'])
+    axs[1].set_xticklabels(avg_df.get('Channel', [str(i) for i in x]))
     axs[1].set_ylabel('Avg PSNR')
     axs[1].set_title('Dot Plot with 95% Confidence Interval')
     axs[1].legend()
     axs[1].grid(True, axis='y')
+
     plt.tight_layout()
     plt.savefig(save_dir / 'All_PSNR_Plots.png', dpi=300)
-    # plt.show()
-
-# --------------------------
-# Full Frame Evaluation
-# --------------------------
-def full_frame_evaluation(predictions_list, tar_list, inp_list, metrics_list, frame_idx, titles, save_path=None):
-    fig = plt.figure(figsize=(24, 20))
-    gs_main = GridSpec(4, 6, figure=fig, wspace=0.05, hspace=0.15, height_ratios=[1.2, 1, 1, 0.4])
-    metrics_data = []
-    for metrics_dict in metrics_list:
-        method_metrics = {'ch0': {}, 'ch1': {}}
-        for metric_name, values in metrics_dict.items():
-            method_metrics['ch0'][metric_name] = values[0][0]
-            method_metrics['ch1'][metric_name] = values[1][0]
-        metrics_data.append(method_metrics)
-
-    # Row 1: Input
-    for i in range(2):
-        col_offset = i * 3
-        current_inp = inp_list[i][frame_idx, ...]
-        gs_input_section = gs_main[0, col_offset:col_offset+3].subgridspec(1, 1)
-        ax_input = fig.add_subplot(gs_input_section[0, 0])
-        ax_input.imshow(current_inp)
-        ax_input.set_title(f"{titles[i]}\nInput (Frame {frame_idx})")
-        ax_input.axis('off')
-
-    current_target = tar_list[0][frame_idx, ...]
-    current_prediction_win = predictions_list[0][frame_idx, ...]
-    current_prediction_og = predictions_list[1][frame_idx, ...]
-
-    # Row 2: Targets
-    gs_targets = gs_main[1, :].subgridspec(1, 4)
-    axs_tar = []
-    for i, ch in enumerate([0, 1]):
-        axs_tar.append(fig.add_subplot(gs_targets[0, i]))
-        axs_tar[-1].imshow(current_target[..., ch])
-        axs_tar[-1].set_title(f"{titles[0]}\nTarget Ch{ch}")
-        axs_tar[-1].axis('off')
-
-        axs_tar.append(fig.add_subplot(gs_targets[0, i+2]))
-        axs_tar[-1].imshow(current_target[..., ch])
-        axs_tar[-1].set_title(f"{titles[1]}\nTarget Ch{ch}")
-        axs_tar[-1].axis('off')
-
-    # Row 3: Predictions
-    gs_preds = gs_main[2, :].subgridspec(1, 4)
-    axs_pred = []
-    for i, ch in enumerate([0, 1]):
-        axs_pred.append(fig.add_subplot(gs_preds[0, i]))
-        axs_pred[-1].imshow(current_prediction_win[..., ch])
-        axs_pred[-1].set_title(f"{titles[0]}\nPrediction Ch{ch}")
-        axs_pred[-1].axis('off')
-
-        axs_pred.append(fig.add_subplot(gs_preds[0, i+2]))
-        axs_pred[-1].imshow(current_prediction_og[..., ch])
-        axs_pred[-1].set_title(f"{titles[1]}\nPrediction Ch{ch}")
-        axs_pred[-1].axis('off')
-
-    # Row 4: Metrics
-    gs_metrics = gs_main[3, :].subgridspec(1, 4)
-    metric_axes = [fig.add_subplot(gs_metrics[0, i]) for i in range(4)]
-    for ax in metric_axes:
-        ax.axis('off')
-
-    def plot_metrics_with_bolding(ax, method_idx, channel_key):
-        ax.set_title("")
-        metric_names = sorted(metrics_data[method_idx][channel_key].keys())
-        y = 0
-        for name in metric_names:
-            val = metrics_data[method_idx][channel_key][name]
-            bold = val == max(metrics_data[method_idx][channel_key].values())
-            ax.text(0.1, 1 - 0.2*y, f"{name}: {val:.2f}", fontsize=12, fontweight='bold' if bold else 'normal')
-            y += 1
-
-    for idx, ax in enumerate(metric_axes):
-        method_idx = 0 if idx < 2 else 1
-        channel_key = 'ch0' if idx % 2 == 0 else 'ch1'
-        plot_metrics_with_bolding(ax, method_idx, channel_key)
-
-    plt.tight_layout()
-    if save_path:
-        plt.savefig(save_path, dpi=300)
-    # # plt.show()
 
 def to_scalar_tuple(x):
     if isinstance(x, (tuple, list)):
@@ -387,3 +312,176 @@ def compute_psnr_and_plot(test_data, img_og, img_win, save_dir):
     # plt.show()
 
     return psnr_df, avg_df
+
+
+# --- full_frame_evaluation function (provided in your initial prompt) ---
+def full_frame_evaluation(
+    predictions_list,
+    tar_list,
+    inp_list,
+    metrics_list,
+    frame_idx,
+    titles,
+    save_path=None
+):
+    """
+    Plots the input, target, and prediction images along with associated metrics
+    for a given frame, comparing different evaluation methods.
+    Custom layout:
+    Row 1: [Empty] [Input Image] [Empty] | [Empty] [Input Image] [Empty]
+    Row 2: Target Ch0 | Target Ch1 | Target Ch0 | Target Ch1
+    Row 3: Pred Ch0 | Pred Ch1 | Pred Ch0 | Pred Ch1
+    Row 4: Metrics Ch0 | Metrics Ch1 | Metrics Ch0 | Metrics Ch1
+
+    Args:
+        predictions_list (list): A list of prediction arrays. Each array
+                                 should have a shape compatible with (..., H, W, 2).
+        tar_list (list): A list of target arrays. Each array should have a
+                         shape compatible with (..., H, W, 2).
+        inp_list (list): A list of input arrays. Each array should have a
+                         shape compatible with (..., H, W) (grayscale).
+        metrics_list (list): A list of dictionaries, where each dictionary
+                             contains metrics for a specific evaluation method.
+                             Metrics are expected to be per-channel, e.g.,
+                             {'metric_name': [(value_ch0, 0.0), (value_ch1, 0.0)]}.
+        frame_idx (int): The index of the current frame being evaluated.
+        titles (list): A list of strings, where each string is the title
+                       for a set of results (e.g., ["windowed", "MMSE 64"]).
+        save_path (str, optional): If provided, the plot will be saved to this path.
+                                   Defaults to None (plot is displayed).
+    """
+    
+    fig = plt.figure(figsize=(24, 20)) 
+
+    gs_main = GridSpec(4, 6, figure=fig, wspace=0.05, hspace=0.15, 
+                    height_ratios=[1.2, 1, 1, 0.4]) 
+
+    metrics_data = [] 
+
+    for metrics_dict in metrics_list:
+        method_metrics = {'ch0': {}, 'ch1': {}}
+        for metric_name, values in metrics_dict.items():
+            method_metrics['ch0'][metric_name] = values[0][0]
+            method_metrics['ch1'][metric_name] = values[1][0]
+        metrics_data.append(method_metrics)
+
+    print(" --- Row 1 (gs_main[0, :]): Input Images (centered) ---")
+    for i in range(2): 
+        col_offset = i * 3 
+        print(f"Plotting input for method {titles[i]} at column offset {col_offset}")
+        current_inp = (inp_list[i][...,0] + inp_list[i][...,1])/2.  # Accessing the correct frame_idx for input
+
+        gs_input_section = gs_main[0, col_offset:col_offset+3].subgridspec(1, 1, wspace=0.05, hspace=0.05)
+        
+        ax_input = fig.add_subplot(gs_input_section[0, 0])
+        ax_input.imshow(current_inp)
+        ax_input.set_title(f"{titles[i]}\nInput (Frame {frame_idx})")
+        ax_input.axis('off')
+
+    current_target = tar_list[0] # Accessing the correct frame_idx for target
+
+    current_prediction_win = predictions_list[0]
+    current_prediction_og = predictions_list[1]
+
+    print("--- Row 2 (gs_main[1, :]): Target Channels ---")
+    gs_targets = gs_main[1, :].subgridspec(1, 4, wspace=0.05, hspace=0.05)
+    ax_tar_win_ch0 = fig.add_subplot(gs_targets[0, 0])
+    ax_tar_win_ch0.imshow(current_target[..., 0])
+    ax_tar_win_ch0.set_title(f"{titles[0]}\nTarget Ch0")
+    ax_tar_win_ch0.axis('off')
+
+    ax_tar_og_ch0 = fig.add_subplot(gs_targets[0, 1])
+    ax_tar_og_ch0.imshow(current_target[..., 0])
+    ax_tar_og_ch0.set_title(f"{titles[1]}\nTarget Ch0")
+    ax_tar_og_ch0.axis('off')
+
+    ax_tar_win_ch1 = fig.add_subplot(gs_targets[0, 2])
+    ax_tar_win_ch1.imshow(current_target[..., 1])
+    ax_tar_win_ch1.set_title(f"{titles[0]}\nTarget Ch1")
+    ax_tar_win_ch1.axis('off')
+
+    ax_tar_og_ch1 = fig.add_subplot(gs_targets[0, 3])
+    ax_tar_og_ch1.imshow(current_target[..., 1])
+    ax_tar_og_ch1.set_title(f"{titles[1]}\nTarget Ch1")
+    ax_tar_og_ch1.axis('off')
+
+    print("--- Row 3 (gs_main[2, :]): Prediction Channels ---")
+    gs_preds = gs_main[2, :].subgridspec(1, 4, wspace=0.05, hspace=0.05)
+    ax_pred_win_ch0 = fig.add_subplot(gs_preds[0, 0])
+    ax_pred_win_ch0.imshow(current_prediction_win[..., 0])
+    ax_pred_win_ch0.set_title(f"{titles[0]}\nPrediction Ch0")
+    ax_pred_win_ch0.axis('off')
+
+    ax_pred_og_ch0 = fig.add_subplot(gs_preds[0, 1])
+    ax_pred_og_ch0.imshow(current_prediction_og[..., 0])
+    ax_pred_og_ch0.set_title(f"{titles[1]}\nPrediction Ch0")
+    ax_pred_og_ch0.axis('off')
+
+    ax_pred_win_ch1 = fig.add_subplot(gs_preds[0, 2])
+    ax_pred_win_ch1.imshow(current_prediction_win[..., 1])
+    ax_pred_win_ch1.set_title(f"{titles[0]}\nPrediction Ch1")
+    ax_pred_win_ch1.axis('off')
+
+    ax_pred_og_ch1 = fig.add_subplot(gs_preds[0, 3])
+    ax_pred_og_ch1.imshow(current_prediction_og[..., 1])
+    ax_pred_og_ch1.set_title(f"{titles[1]}\nPrediction Ch1")
+    ax_pred_og_ch1.axis('off')
+    
+    # --- Row 4 (gs_main[3, :]): Metrics ---
+    gs_metrics = gs_main[3, :].subgridspec(1, 4, wspace=0.05, hspace=0.05)
+    
+    metric_axes = [
+        fig.add_subplot(gs_metrics[0, 0]), 
+        fig.add_subplot(gs_metrics[0, 1]), 
+        fig.add_subplot(gs_metrics[0, 2]), 
+        fig.add_subplot(gs_metrics[0, 3])  
+    ]
+
+    for ax in metric_axes:
+        ax.axis('off') 
+
+    def plot_metrics_with_bolding(ax, method_idx, channel_key, title):
+        ax.set_title(title)
+        
+        metric_names = sorted(metrics_data[method_idx][channel_key].keys())
+        
+        y_position = 0.5 
+        line_spacing = 1.0 / (len(metric_names) + 1) 
+        
+        bbox_height_per_line = 0.22 
+        total_bbox_height = len(metric_names) * bbox_height_per_line
+
+        rect = plt.Rectangle((0, 0.5 - total_bbox_height/2), 1, total_bbox_height, 
+                            transform=ax.transAxes,
+                            facecolor='lightgray', edgecolor='k', linewidth=1, alpha=0.7)
+        ax.add_patch(rect)
+
+        for i, metric_name in enumerate(metric_names):
+            current_value = metrics_data[method_idx][channel_key][metric_name]
+            other_method_idx = 1 if method_idx == 0 else 0
+            other_value = metrics_data[other_method_idx][channel_key][metric_name]
+
+            text_weight = 'normal'
+            # Only bold if the current value is strictly greater than the other value
+            if current_value > other_value:
+                text_weight = 'bold'
+            
+            ax.text(0.5, y_position + ( (len(metric_names) - 1) / 2 - i) * line_spacing,
+                    f"{metric_name}: {current_value:.2f}",
+                    verticalalignment='center', horizontalalignment='center',
+                    transform=ax.transAxes,
+                    fontsize=12,
+                    weight=text_weight) 
+
+    # Plotting for Windowed (Method 0)
+    plot_metrics_with_bolding(metric_axes[0], 0, 'ch0', f"")
+    plot_metrics_with_bolding(metric_axes[1], 1, 'ch0', f"") 
+    plot_metrics_with_bolding(metric_axes[2], 0, 'ch1', f"") 
+    plot_metrics_with_bolding(metric_axes[3], 1, 'ch1', f"") 
+
+
+    plt.tight_layout() 
+
+    if save_path:
+        plt.savefig(save_path, bbox_inches='tight')
+        plt.close(fig)

@@ -85,18 +85,30 @@ def setup_dataset(dataset_name, img_sz=64, sliding_window_flag=False):
 
 def compute_and_save_stats(tar, img_og, img_sw, save_dir, dataset_name):
     stats_og, stats_win = {}, {}
+
     for i in tqdm(range(len(img_og)), desc="Computing high-SNR stats"):
         stats_og[i] = compute_high_snr_stats(tar[i:i+1], img_og[i:i+1])
         stats_win[i] = compute_high_snr_stats(tar[i:i+1], img_sw[i:i+1])
 
+    # ensure directory exists
     save_dir.mkdir(parents=True, exist_ok=True)
+
+    # save as pickle
     with open(save_dir / f"stats_og_{dataset_name}.pkl", "wb") as f:
         dill.dump(stats_og, f)
     with open(save_dir / f"stats_win_{dataset_name}.pkl", "wb") as f:
         dill.dump(stats_win, f)
 
-    return stats_og, stats_win
+    # convert to DataFrames
+    df_og = pd.DataFrame.from_dict(stats_og, orient="index")
+    df_win = pd.DataFrame.from_dict(stats_win, orient="index")
 
+    # save as Excel
+    df_og.to_csv(save_dir / f"stats_og_{dataset_name}.csv", index=True)
+    df_win.to_csv(save_dir / f"stats_win_{dataset_name}.csv", index=True)
+
+
+    return stats_og, stats_win
 
 # ------------------------------
 # Analyses
@@ -115,7 +127,7 @@ def run_gradient_based_analysis(img_sw, img_og, save_dir, tile_size=32, bins=200
     )
 
 
-def run_qualitative_analysis(test_dset, img_sw, img_og, save_dir):
+def run_qualitative_analysis(test_dset, img_sw, img_og, save_dir, dataset_name):
     tar = get_target(test_dset)
     inp = get_input(test_dset)
 
@@ -126,23 +138,21 @@ def run_qualitative_analysis(test_dset, img_sw, img_og, save_dir):
     plot_all_psnr(avg_psnr_df,save_dir = save_dir)
 
     # --- High-SNR stats ---
-    stats_og, stats_win = compute_and_save_stats(tar, img_og, img_sw, save_dir, "dataset")
+    stats_og, stats_win = compute_and_save_stats(tar, img_og, img_sw, save_dir, dataset_name)
 
     # --- Full-frame evaluation plots ---
     frame_dir = save_dir / "Frames"
     frame_dir.mkdir(parents=True, exist_ok=True)
     for idx in range(len(test_dset._data)):
         full_frame_evaluation(
-            predictions_list=[img_sw, img_og],
-            tar_list=[test_dset._data, test_dset._data],
-            inp_list=[inp, inp],
+            predictions_list=[img_sw[idx], img_og[idx]],
+            tar_list=[test_dset._data[idx], test_dset._data[idx]],
+            inp_list=[inp[idx], inp[idx]],
             metrics_list=[stats_win[idx], stats_og[idx]],
             frame_idx=idx,
             titles=["Sliding Window", "Original"],
             save_path=frame_dir / f"{idx+1}.png"
         )
-
-
 # ------------------------------
 # Main
 # ------------------------------
@@ -176,13 +186,6 @@ def main():
     # Default: run both if no flags specified
     if not (args.gradient_based_analysis or args.qualitative_analysis or args.all):
         run_gradient = run_qualitative = True
-
-    if run_qualitative:
-        print("Loading full dataset (may take time)...")
-        test_dset = setup_dataset(args.dataset)
-        print("Running qualitative analysis (PSNR, metrics, frame plots)...")
-        run_qualitative_analysis(test_dset, img_sw, img_og, save_dir)
-
     if run_gradient:
         print("Running gradient-based analysis...")
         run_gradient_based_analysis(
@@ -193,9 +196,11 @@ def main():
             kl_start=args.kl_start,
             kl_end=args.kl_end
         )
-
-
-
+    if run_qualitative:
+        print("Loading full dataset (may take time)...")
+        test_dset = setup_dataset(args.dataset)
+        print("Running qualitative analysis (PSNR, metrics, frame plots)...")
+        run_qualitative_analysis(test_dset, img_sw, img_og, save_dir, args.dataset)
 
 if __name__ == "__main__":
     main()
