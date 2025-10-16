@@ -250,6 +250,10 @@ if __name__ == "__main__":
                 num_workers=args.num_workers,
                 results_root=args.results_root
             )
+            stitch_predictions_from_dir_only(train_dset, test_dset, args.dataset, ckpt_dir,results_root=args.results_root,
+                                     pred_dir_name=args.raw_preds_dir,
+                                     use_memmap=True,
+                                     batch_size=args.batch_size)
     else:
         print("Running Inference Original")
         run_inference_original(

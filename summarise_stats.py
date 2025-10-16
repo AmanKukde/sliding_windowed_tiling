@@ -99,8 +99,8 @@ def summarize_all_experiments(base_dir, output_excel="summary_results.xlsx"):
 
 
 if __name__ == "__main__":
-    args = parse_args()
+    # args = parse_args()
     summary_df, avg_df = summarize_all_experiments(
-        base_dir=args.save_base,
+        base_dir="/group/jug/aman/usplit_analysis_results",
         output_excel="final_experiment_summary.xlsx"
     )

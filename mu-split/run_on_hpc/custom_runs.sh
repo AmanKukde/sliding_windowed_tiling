@@ -6,7 +6,8 @@ set -e
 # ------------------------
 DATASETS=("PAVIA_ATN" "Hagen")
 LC_TYPES=("LeanLC" "DeepLC")
-SLIDING=("off")
+# SLIDING=("on" "off")
+SLIDING=("on")
 
 # Dataset-specific modalities
 declare -A MODALITIES
@@ -23,9 +24,9 @@ TIME="36:00:00"
 # Paths (absolute)
 PROJECT_DIR="/home/aman.kukde/sliding_windowed_tiling/mu-split"
 PYTHON_BIN="/scratch/aman.kukde/conda/envs/msr/bin/python3.10"
-RESULTS_FOLDER="/group/jug/aman/ConsolidatedResults/Results_usplit_64"
-BATCH_SIZE=64
 SCRIPT="${PROJECT_DIR}/inference.py"
+RESULTS_FOLDER="/group/jug/aman/usplit_13Oct25/"
+BATCH_SIZE=64
 
 # ------------------------
 # Logs with datetime ID
@@ -75,7 +76,7 @@ cd ${PROJECT_DIR}
 
 # Run inference
 if [ "${slide}" == "on" ]; then
-  ${PYTHON_BIN} ${SCRIPT} --dataset ${dataset} --modality ${modality} --lc_type ${lc} --sliding_window_flag --results_root ${RESULTS_FOLDER} --batch_size ${BATCH_SIZE} --stitch_only
+  ${PYTHON_BIN} ${SCRIPT} --dataset ${dataset} --modality ${modality} --lc_type ${lc} --sliding_window_flag --results_root ${RESULTS_FOLDER} --batch_size ${BATCH_SIZE}
 
 else
   ${PYTHON_BIN} ${SCRIPT} --dataset ${dataset} --modality ${modality} --lc_type ${lc} --results_root ${RESULTS_FOLDER} --batch_size ${BATCH_SIZE}

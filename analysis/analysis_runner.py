@@ -16,9 +16,9 @@ from concurrent.futures import ProcessPoolExecutor, as_completed
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Run batch analysis on multiple results.")
-    parser.add_argument("--results_base", default="/group/jug/aman/usplit-results/")
+    parser.add_argument("--results_base", default="/group/jug/aman/usplit_13Oct25/")
     parser.add_argument("--project_dir", default="/home/aman.kukde/sliding_windowed_tiling/")
-    parser.add_argument("--save_base", default="/group/jug/aman/experiment_analysis_results")
+    parser.add_argument("--save_base", default="/group/jug/aman/usplit_analysis_results_16Oct25/")
     parser.add_argument("--python_bin", default="/scratch/aman.kukde/conda/envs/msr/bin/python3.10")
     parser.add_argument("--max_workers", type=int, default=4)
     parser.add_argument("--dry_run", action="store_true")
@@ -30,7 +30,7 @@ def parse_args():
     parser.add_argument("--gpus", type=int, default=1)
     parser.add_argument("--mem", default="64GB")
     parser.add_argument("--cpus", type=int, default=4)
-    parser.add_argument("--time", default="36:00:00")
+    parser.add_argument("--time", default="12:00:00")
     return parser.parse_args()
 
 def find_prediction_pairs(results_base: Path):
@@ -84,8 +84,8 @@ def run_local(pair, args):
         "--pred_og", og_path,
         "--save_dir", str(save_dir),
         "--tile_size", "32",
-        "--bins", "2000",
-        "--channel", "1",
+        "--bins", "200",
+        "--channel", "all",
         "--kl_start", "29",
         "--kl_end", "33",
     ]
@@ -110,6 +110,7 @@ def run_local(pair, args):
     except subprocess.CalledProcessError:
         print(f"❌ Failed {dataset}/{modality}/{lc} (log: {log_file})")
         return f"[FAILED] {dataset}/{modality}/{lc}"
+    
 def run_hpc(pair, args):
     dataset, modality, lc = pair["dataset"], pair["modality"], pair["lc"]
     sw_path, og_path = pair["sw_path"], pair["og_path"]
@@ -122,7 +123,7 @@ def run_hpc(pair, args):
     jobname = f"grad_{dataset}_{modality}_{lc}"
     sbatch_file = save_dir / f"sbatch_{jobname}.sh"
 
-    cmd = f"{args.python_bin} {analyze_script} --dataset {dataset} --pred_sw {sw_path} --pred_og {og_path} --save_dir {save_dir} --tile_size 32 --bins 2000 --channel 1 --kl_start 29 --kl_end 33"
+    cmd = f"{args.python_bin} {analyze_script} --dataset {dataset} --pred_sw {sw_path} --pred_og {og_path} --save_dir {save_dir} --tile_size 32 --bins 200 --channel 'all' --kl_start 29 --kl_end 33"
     if args.gradient_based_analysis:
         cmd += " --gradient_based_analysis"
     if args.qualitative_analysis:

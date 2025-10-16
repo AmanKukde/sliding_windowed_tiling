@@ -113,9 +113,9 @@ def compute_and_save_stats(tar, img_og, img_sw, save_dir, dataset_name):
 # ------------------------------
 # Analyses
 # ------------------------------
-def run_gradient_based_analysis(img_sw, img_og, save_dir, tile_size=32, bins=2000, channel=1, kl_start=29, kl_end=33):
-    grad_sw = GradientUtils(img_sw, tile_size=tile_size)
-    grad_og = GradientUtils(img_og, tile_size=tile_size)
+def run_gradient_based_analysis(img_sw, img_og, save_dir, inner_tile_size=32, bins=2000, channel=1, kl_start=29, kl_end=33):
+    grad_sw = GradientUtils(img_sw, tile_size=inner_tile_size)
+    grad_og = GradientUtils(img_og, tile_size=inner_tile_size)
     bin_edges = grad_sw.make_bin_edges(n_bins=bins)
 
     summarize_gradients(
@@ -123,8 +123,8 @@ def run_gradient_based_analysis(img_sw, img_og, save_dir, tile_size=32, bins=200
         grad_utils_sw=grad_sw,
         bin_edges=bin_edges,
         channel=channel,
-        save_dir=save_dir,
-    )
+        save_dir= save_dir / f"Gradient_Analysis_Channel_{channel}")
+
 
 
 def run_qualitative_analysis(test_dset, img_sw, img_og, save_dir, dataset_name):
@@ -162,11 +162,11 @@ def main():
     parser.add_argument("--pred_sw", required=True, help="Sliding window predictions (.tiff/.pkl)")
     parser.add_argument("--pred_og", required=True, help="Original predictions (.tiff/.pkl)")
     parser.add_argument("--save_dir", required=True, help="Directory to save plots and stats")
-    parser.add_argument("--tile_size", type=int, default=32)
+    parser.add_argument("--tile_size", type=int, default=64)
     parser.add_argument("--bins", type=int, default=200)
     parser.add_argument("--kl_start", type=int, default=29)
     parser.add_argument("--kl_end", type=int, default=33)
-    parser.add_argument("--channel", type=int, default=1)
+    parser.add_argument("--channel", type=int, default="all")
     parser.add_argument("--gradient_based_analysis", action="store_true")
     parser.add_argument("--qualitative_analysis", action="store_true")
     parser.add_argument("--all", action="store_true", help="Run all analyses if no flags specified")
@@ -188,14 +188,25 @@ def main():
         run_gradient = run_qualitative = True
     if run_gradient:
         print("Running gradient-based analysis...")
-        run_gradient_based_analysis(
-            img_sw, img_og, save_dir,
-            tile_size=args.tile_size,
-            bins=args.bins,
-            channel=args.channel,
-            kl_start=args.kl_start,
-            kl_end=args.kl_end
-        )
+        if args.channel == "all":
+            for channel in [0,1]:
+                run_gradient_based_analysis(
+                    img_sw, img_og, save_dir,
+                    tile_size=args.tile_size,
+                    bins=args.bins,
+                    channel=channel,
+                    kl_start=args.kl_start,
+                    kl_end=args.kl_end
+                )
+        else:
+            run_gradient_based_analysis(
+                img_sw, img_og, save_dir,
+                tile_size=args.tile_size,
+                bins=args.bins,
+                channel=args.channel,
+                kl_start=args.kl_start,
+                kl_end=args.kl_end
+            )
     if run_qualitative:
         print("Loading full dataset (may take time)...")
         test_dset = setup_dataset(args.dataset)

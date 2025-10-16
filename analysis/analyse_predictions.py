@@ -19,7 +19,7 @@ def parse_args():
     parser = argparse.ArgumentParser(description="Run gradient analysis on multiple results.")
     parser.add_argument(
         "--results_base",
-        default="/group/jug/aman/usplit-results/",
+        default="/group/jug/aman/usplit_13Oct25/",
         help="Base directory containing prediction results for all datasets.",
     )
     parser.add_argument(
@@ -29,12 +29,12 @@ def parse_args():
     )
     parser.add_argument(
         "--save_base",
-        default="./gradient_analysis_results_local",
+        default="gradient_analysis_results_16Oct25",
         help="Where to save analysis results.",
     )
     parser.add_argument(
         "--python_bin",
-        default="/localscratch/conda/envs/msr/bin/python3.10",
+        default="/scratch/aman.kukde/conda/envs/msr/bin/python3.10",
         help="Python interpreter to use (e.g. /path/to/conda/env/bin/python).",
     )
     parser.add_argument("--max_workers", type=int, default=4, help="How many analyses to run in parallel.")

@@ -72,89 +72,89 @@ def setup_environment(dataset_name, lc_type, modality,
         load_data_func=get_train_val_data,
     )
 
-    if model == "musplit":
-        config_fpath = get_config_file_from_ckpt_dir(ckpt_dir)
-        config = ml_collections.ConfigDict(load_config(config_fpath))
-        old_image_size = None
+    
+    config_fpath = get_config_file_from_ckpt_dir(ckpt_dir)
+    config = ml_collections.ConfigDict(load_config(config_fpath))
+    old_image_size = None
 
-        # Patch config if necessary
-        with config.unlocked():
-            if 'test_fraction' not in config.training:
-                config.training.test_fraction = 0.0
-            if 'datadir' not in config:
-                config.datadir = ''
-            if 'encoder' not in config.model:
-                config.model.encoder = ml_collections.ConfigDict()
-                config.model.decoder = ml_collections.ConfigDict()
-                config.model.encoder.dropout = config.model.dropout
-                config.model.decoder.dropout = config.model.dropout
-                config.model.encoder.blocks_per_layer = config.model.blocks_per_layer
-                config.model.decoder.blocks_per_layer = config.model.blocks_per_layer
-                config.model.encoder.n_filters = config.model.n_filters
-                config.model.decoder.n_filters = config.model.n_filters
-            if 'multiscale_retain_spatial_dims' not in config.model.decoder:
-                config.model.decoder.multiscale_retain_spatial_dims = False
-            if 'res_block_kernel' not in config.model.encoder:
-                config.model.encoder.res_block_kernel = 3
-                config.model.decoder.res_block_kernel = 3
-            if 'res_block_skip_padding' not in config.model.encoder:
-                config.model.encoder.res_block_skip_padding = False
-                config.model.decoder.res_block_skip_padding = False
-            if config.data.data_type == DataType.CustomSinosoid:
-                if 'max_vshift_factor' not in config.data:
-                    config.data.max_vshift_factor = config.data.max_shift_factor
-                    config.data.max_hshift_factor = 0
-                if 'encourage_non_overlap_single_channel' not in config.data:
-                    config.data.encourage_non_overlap_single_channel = False
-            if 'skip_bottom_layers_count' in config.model:
-                config.model.skip_bottom_layers_count = 0
-            if 'logvar_lowerbound' not in config.model:
-                config.model.logvar_lowerbound = None
-            if 'train_aug_rotate' not in config.data:
-                config.data.train_aug_rotate = False
-            if 'multiscale_lowres_separate_branch' not in config.model:
-                config.model.multiscale_lowres_separate_branch = False
-            if 'multiscale_retain_spatial_dims' not in config.model:
-                config.model.multiscale_retain_spatial_dims = False
-            config.data.train_aug_rotate = False
-            if 'randomized_channels' not in config.data:
-                config.data.randomized_channels = False
-            if 'predict_logvar' not in config.model:
-                config.model.predict_logvar = None
-            if 'batchnorm' in config.model and 'batchnorm' not in config.model.encoder:
-                config.model.decoder.batchnorm = config.model.batchnorm
-                config.model.encoder.batchnorm = config.model.batchnorm
-            if 'conv2d_bias' not in config.model.decoder:
-                config.model.decoder.conv2d_bias = True
-            if img_sz is not None:
-                old_image_size = config.data.image_size
-                config.data.image_size = img_sz
-            config.model.mode_pred = True
-            if config.model.model_type == ModelType.UNet and 'n_levels' not in config.model:
-                config.model.n_levels = 4
-            if config.model.model_type == ModelType.UNet and 'init_channel_count' not in config.model:
-                config.model.init_channel_count = 64
-            if 'skip_receptive_field_loss_tokens' not in config.loss:
-                config.loss.skip_receptive_field_loss_tokens = []
-
-        if lc_type =="regularLC":
-            config.model.z_dims = [128, 128, 128, 128]
-            config.model.multiscale_retain_spatial_dims = True
-            config.model.decoder.multiscale_retain_spatial_dims = True
-        elif lc_type == "LeanLC":
-            config.model.z_dims = [128, 128, 128, 128]
-            config.model.multiscale_retain_spatial_dims = False
+    # Patch config if necessary
+    with config.unlocked():
+        if 'test_fraction' not in config.training:
+            config.training.test_fraction = 0.0
+        if 'datadir' not in config:
+            config.datadir = ''
+        if 'encoder' not in config.model:
+            config.model.encoder = ml_collections.ConfigDict()
+            config.model.decoder = ml_collections.ConfigDict()
+            config.model.encoder.dropout = config.model.dropout
+            config.model.decoder.dropout = config.model.dropout
+            config.model.encoder.blocks_per_layer = config.model.blocks_per_layer
+            config.model.decoder.blocks_per_layer = config.model.blocks_per_layer
+            config.model.encoder.n_filters = config.model.n_filters
+            config.model.decoder.n_filters = config.model.n_filters
+        if 'multiscale_retain_spatial_dims' not in config.model.decoder:
             config.model.decoder.multiscale_retain_spatial_dims = False
-        elif lc_type == "DeepLC":
-            config.model.z_dims = [128, 128, 128, 128, 128, 128, 128, 128]
-            config.model.multiscale_retain_spatial_dims = True
-            config.model.decoder.multiscale_retain_spatial_dims = True
+        if 'res_block_kernel' not in config.model.encoder:
+            config.model.encoder.res_block_kernel = 3
+            config.model.decoder.res_block_kernel = 3
+        if 'res_block_skip_padding' not in config.model.encoder:
+            config.model.encoder.res_block_skip_padding = False
+            config.model.decoder.res_block_skip_padding = False
+        if config.data.data_type == DataType.CustomSinosoid:
+            if 'max_vshift_factor' not in config.data:
+                config.data.max_vshift_factor = config.data.max_shift_factor
+                config.data.max_hshift_factor = 0
+            if 'encourage_non_overlap_single_channel' not in config.data:
+                config.data.encourage_non_overlap_single_channel = False
+        if 'skip_bottom_layers_count' in config.model:
+            config.model.skip_bottom_layers_count = 0
+        if 'logvar_lowerbound' not in config.model:
+            config.model.logvar_lowerbound = None
+        if 'train_aug_rotate' not in config.data:
+            config.data.train_aug_rotate = False
+        if 'multiscale_lowres_separate_branch' not in config.model:
+            config.model.multiscale_lowres_separate_branch = False
+        if 'multiscale_retain_spatial_dims' not in config.model:
+            config.model.multiscale_retain_spatial_dims = False
+        config.data.train_aug_rotate = False
+        if 'randomized_channels' not in config.data:
+            config.data.randomized_channels = False
+        if 'predict_logvar' not in config.model:
+            config.model.predict_logvar = None
+        if 'batchnorm' in config.model and 'batchnorm' not in config.model.encoder:
+            config.model.decoder.batchnorm = config.model.batchnorm
+            config.model.encoder.batchnorm = config.model.batchnorm
+        if 'conv2d_bias' not in config.model.decoder:
+            config.model.decoder.conv2d_bias = True
+        if img_sz is not None:
+            old_image_size = config.data.image_size
+            config.data.image_size = img_sz
+        config.model.mode_pred = True
+        if config.model.model_type == ModelType.UNet and 'n_levels' not in config.model:
+            config.model.n_levels = 4
+        if config.model.model_type == ModelType.UNet and 'init_channel_count' not in config.model:
+            config.model.init_channel_count = 64
+        if 'skip_receptive_field_loss_tokens' not in config.loss:
+            config.loss.skip_receptive_field_loss_tokens = []
 
-        # Compute mean/std for normalization
-        if config.data.target_separate_normalization:
-            mean_fr_model, std_fr_model = train_dset.compute_individual_mean_std()
-        else:
-            mean_fr_model, std_fr_model = train_dset.get_mean_std()
+    if lc_type =="regularLC":
+        config.model.z_dims = [128, 128, 128, 128]
+        config.model.multiscale_retain_spatial_dims = True
+        config.model.decoder.multiscale_retain_spatial_dims = True
+    elif lc_type == "LeanLC":
+        config.model.z_dims = [128, 128, 128, 128]
+        config.model.multiscale_retain_spatial_dims = False
+        config.model.decoder.multiscale_retain_spatial_dims = False
+    elif lc_type == "DeepLC":
+        config.model.z_dims = [128, 128, 128, 128, 128, 128, 128, 128]
+        config.model.multiscale_retain_spatial_dims = True
+        config.model.decoder.multiscale_retain_spatial_dims = True
+
+    # Compute mean/std for normalization
+    if config.data.target_separate_normalization:
+        mean_fr_model, std_fr_model = train_dset.compute_individual_mean_std()
+    else:
+        mean_fr_model, std_fr_model = train_dset.get_mean_std()
 
     # Build model + load checkpoint
     model = create_model(config, mean_fr_model, std_fr_model)
