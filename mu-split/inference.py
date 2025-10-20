@@ -150,7 +150,7 @@ def stitch_predictions_from_dir_only(train_dset, test_dset, dataset, ckpt_dir,
     # Determine directories
     save_dir = get_save_dir(results_root, dataset, ckpt_dir)
     if pred_dir_name is None:
-        raw_preds_dir = save_dir#get_raw_preds_dir(save_dir, dataset, ckpt_dir)
+        raw_preds_dir = get_raw_preds_dir(save_dir, dataset, ckpt_dir)
     else:
         raw_preds_dir = Path(pred_dir_name)
     raw_preds_dir.mkdir(exist_ok=True, parents=True)
@@ -166,7 +166,7 @@ def stitch_predictions_from_dir_only(train_dset, test_dset, dataset, ckpt_dir,
         dset=test_dset,
         num_workers=6,
         inner_fraction=0.5,
-        batch_size=batch_size,
+        batch_size=batch_size*5,
         digits=digits,
         num_patches=num_patches,
         use_memmap=use_memmap
@@ -235,25 +235,24 @@ if __name__ == "__main__":
     # ------------------------
     # Run inference
     # ------------------------
+    if args.stitch_only:
+        print("Running Stitching Only")
+        stitch_predictions_from_dir_only(train_dset, test_dset, args.dataset, ckpt_dir,results_root=args.results_root,
+                                    pred_dir_name=args.raw_preds_dir,
+                                    use_memmap=True,
+                                    batch_size=args.batch_size)
     if args.sliding_window_flag:
-        if args.stitch_only:
-            print("Running Stitching Only")
-            stitch_predictions_from_dir_only(train_dset, test_dset, args.dataset, ckpt_dir,results_root=args.results_root,
-                                     pred_dir_name=args.raw_preds_dir,
-                                     use_memmap=True,
-                                     batch_size=args.batch_size)
-        else:
-            print("Running Inference Sliding")
-            run_inference_sliding(
-                model,test_dset,args.dataset, ckpt_dir,
-                batch_size=args.batch_size,
-                num_workers=args.num_workers,
-                results_root=args.results_root
-            )
-            stitch_predictions_from_dir_only(train_dset, test_dset, args.dataset, ckpt_dir,results_root=args.results_root,
-                                     pred_dir_name=args.raw_preds_dir,
-                                     use_memmap=True,
-                                     batch_size=args.batch_size)
+        print("Running Inference Sliding")
+        run_inference_sliding(
+            model,test_dset,args.dataset, ckpt_dir,
+            batch_size=args.batch_size,
+            num_workers=args.num_workers,
+            results_root=args.results_root
+        )
+        stitch_predictions_from_dir_only(train_dset, test_dset, args.dataset, ckpt_dir,results_root=args.results_root,
+                                    pred_dir_name=args.raw_preds_dir,
+                                    use_memmap=True,
+                                    batch_size=args.batch_size)
     else:
         print("Running Inference Original")
         run_inference_original(

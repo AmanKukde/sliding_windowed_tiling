@@ -52,16 +52,16 @@ def setup_environment(dataset_name, lc_type, modality,
         multiscale_lowres_count=multiscale_lowres_count,
     )
 
-    # MicroSplit experiment params (optional, in case used later)
-    experiment_params = get_microsplit_parameters(
-        algorithm="musplit",
-        img_size=(img_sz, img_sz),
-        batch_size=batch_size,
-        num_epochs=50,
-        multiscale_count=multiscale_lowres_count,
-        noise_model_path=NM_PATH,
-        target_channels=2,
-    )
+    # # MicroSplit experiment params (optional, in case used later)
+    # experiment_params = get_microsplit_parameters(
+    #     algorithm="musplit",
+    #     img_size=(img_sz, img_sz),
+    #     batch_size=batch_size,
+    #     num_epochs=50,
+    #     multiscale_count=multiscale_lowres_count,
+    #     noise_model_path=NM_PATH,
+    #     target_channels=2,
+    # )
 
     # Create datasets
     train_dset, val_dset, test_dset, data_stats = create_train_val_datasets(

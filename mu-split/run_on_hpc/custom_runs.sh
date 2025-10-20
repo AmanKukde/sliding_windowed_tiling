@@ -76,7 +76,7 @@ cd ${PROJECT_DIR}
 
 # Run inference
 if [ "${slide}" == "on" ]; then
-  ${PYTHON_BIN} ${SCRIPT} --dataset ${dataset} --modality ${modality} --lc_type ${lc} --sliding_window_flag --results_root ${RESULTS_FOLDER} --batch_size ${BATCH_SIZE}
+  ${PYTHON_BIN} ${SCRIPT} --dataset ${dataset} --modality ${modality} --lc_type ${lc} --sliding_window_flag --results_root ${RESULTS_FOLDER} --batch_size ${BATCH_SIZE} --stitch_only
 
 else
   ${PYTHON_BIN} ${SCRIPT} --dataset ${dataset} --modality ${modality} --lc_type ${lc} --results_root ${RESULTS_FOLDER} --batch_size ${BATCH_SIZE}
