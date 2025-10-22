@@ -1,1 +1,10 @@
 *.log
+*.npz
+*.pyc
+*.ckpt
+*.npy
+*.png
+*.DS_Store
+*.pkl
+*.tiff
+*.DS_Store
