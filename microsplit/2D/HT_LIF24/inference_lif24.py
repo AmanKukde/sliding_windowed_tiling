@@ -77,9 +77,9 @@ def run_inference_original(
 
     stitched_predictions = process_preds(stitched_predictions_, stitched_stds_, train_dset, key = exposure)
 
-    save_dir = get_save_dir(results_root, exposure, ckpt_dir)
-    save_tiff(save_dir / "pred_test_dset_usplit_og.tiff", stitched_predictions.transpose(0, 3, 1, 2))
-    with open(save_dir / "pred_test_dset_usplit_og.pkl", "wb") as f:
+    save_dir = get_save_dir(results_root, dataset="HT_LIF24")
+    save_tiff(save_dir / "pred_test_dset_microsplit_og.tiff", stitched_predictions.transpose(0, 3, 1, 2))
+    with open(save_dir / "pred_test_dset_microsplit_og.pkl", "wb") as f:
         dill.dump(stitched_predictions, f)
 
     print(f"✅ Saved predictions to {save_dir}")
@@ -171,7 +171,8 @@ def stitch_predictions_from_dir_only(
         batch_size=batch_size * 5,
         digits=digits,
         use_memmap=use_memmap,
-        num_channels = channels
+        num_channels = channels,
+        debug=False,
     )
 
     mean_params, std_params = train_dset.get_mean_std()
@@ -180,8 +181,8 @@ def stitch_predictions_from_dir_only(
         + mean_params["target"].squeeze().reshape(1, 1, 1, -1)
     )
 
-    save_tiff(save_dir / "pred_test_dset_stitched.tiff", stitched_predictions.transpose(0, 3, 1, 2))
-    with open(save_dir / "pred_test_dset_stitched.pkl", "wb") as f:
+    save_tiff(save_dir / "pred_test_dset_microsplit_stitched.tiff", stitched_predictions.transpose(0, 3, 1, 2))
+    with open(save_dir / "pred_test_dset_microsplit_stitched.pkl", "wb") as f:
         dill.dump(stitched_predictions, f)
 
     print(f"✅ Saved stitched predictions to {save_dir}")

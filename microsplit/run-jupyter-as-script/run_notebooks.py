@@ -11,8 +11,8 @@ if __name__ == '__main__':
     parser.add_argument('--notebook', type=str, help='Notebook to run')
     parser.add_argument('--outputdir', type=str, help='Output notebook directory', default='/group/jug/aman/MicroSplit/NotebookRuns/')
     parser.add_argument('--sliding_window_flag',  action='store_true', help='Which inference to use')
-    parser.add_argument('--tag_time_flag', action='store_true', help='Tag time flag')
-    # parser.add_argument('--override_kwargs', type=json.loads, default='{}', )
+    parser.add_argument('--tag_time_flag', action='store_false', help='Tag time flag')
+    parser.add_argument('--override_kwargs', type=json.loads, default='{}', )
     args = parser.parse_args()
     param_dict = args.override_kwargs
     keys = sorted(param_dict.keys())
@@ -51,6 +51,6 @@ if __name__ == '__main__':
     pm.execute_notebook(
         args.notebook,
         output_fpath,
-        parameters = param_dict
+        # parameters = param_dict
     )
     

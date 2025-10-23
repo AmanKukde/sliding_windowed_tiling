@@ -11,7 +11,7 @@
 #SBATCH --time=36:00:00
 
 cd /group/jug/aman/microsplit-runs/HT_H23B
-conda source microsplit
+conda source msr
 
 # Run inference
-/scratch/aman.kukde/conda/envs/microsplit/bin/python3.9 /home/aman.kukde/sliding_windowed_tiling/microsplit/run-jupyter-as-script/run_notebooks.py --notebook "/home/aman.kukde/sliding_windowed_tiling/MicroSplit-reproducibility/examples/2D/HT_H23B/02_predict.ipynb" --outputdir "/group/jug/aman/microsplit-runs/HT_H23B/notebooks/"
+/scratch/aman.kukde/conda/envs/msr/bin/python3.10 /home/aman.kukde/sliding_windowed_tiling/microsplit/run-jupyter-as-script/run_notebooks.py --notebook "/home/aman.kukde/sliding_windowed_tiling/microsplit/2D/HT_H23B/02_predict_sw.ipynb" --outputdir "/group/jug/aman/microsplit-runs/HT_H23B/notebooks/"

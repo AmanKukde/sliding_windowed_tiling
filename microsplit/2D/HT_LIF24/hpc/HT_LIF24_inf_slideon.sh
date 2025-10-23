@@ -14,4 +14,4 @@ source ~/.bashrc
 cd /group/jug/aman/microsplit_runs_22Oct25/HT_LIF24
 conda activate msr
 # Run inference
-/scratch/aman.kukde/conda/envs/msr/bin/python3.10 /home/aman.kukde/sliding_windowed_tiling/microsplit/2D/HT_LIF24/inference_lif24.py  --results_root /group/jug/aman/microsplit_runs_22Oct25/ --batch_size 256 --sliding_window_flag
+/scratch/aman.kukde/conda/envs/msr/bin/python3.10 /home/aman.kukde/sliding_windowed_tiling/microsplit/2D/HT_LIF24/inference_lif24.py  --results_root /group/jug/aman/microsplit_runs_22Oct25/ --batch_size 256 --sliding_window_flag --stitch_only
