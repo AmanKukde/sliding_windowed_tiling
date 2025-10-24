@@ -9,7 +9,7 @@ from tqdm import tqdm
 from torch.utils.data import DataLoader
 import subprocess
 
-from train_setup_lif24 import setup_environment_HT_LIF24
+from train_setup_lif24 import setup_environment_PAVIA_ATN
 from careamics.lvae_training.eval_utils import (
     stitch_and_crop_predictions_inner_tile_from_dir,
     get_predictions,
@@ -22,7 +22,7 @@ from usplit.core.tiff_reader import save_tiff
 # -----------------------------------------------------------------------------
 def get_save_dir(results_root, dataset):
     """
-    Build save path as results_root/HT_LIF24/
+    Build save path as results_root/PAVIA_ATN/
     """
     save_dir = Path(results_root) / dataset 
     save_dir.mkdir(parents=True, exist_ok=True)
@@ -51,7 +51,7 @@ def run_inference_original(
     num_workers=6,
     mmse_count=64,
     grid_size=32,
-    results_root="./results_htlif24",
+    results_root="./results_PAVIA_ATN",
 ):
     print("🚀 Running inference (non-sliding mode)...")
     stitched_predictions_, stitched_stds_ = get_predictions(
@@ -77,7 +77,7 @@ def run_inference_original(
 
     stitched_predictions = process_preds(stitched_predictions_, stitched_stds_, train_dset, key = exposure)
 
-    save_dir = get_save_dir(results_root, dataset="HT_LIF24")
+    save_dir = get_save_dir(results_root, dataset="PAVIA_ATN")
     save_tiff(save_dir / "pred_test_dset_microsplit_og.tiff", stitched_predictions.transpose(0, 3, 1, 2))
     with open(save_dir / "pred_test_dset_microsplit_og.pkl", "wb") as f:
         dill.dump(stitched_predictions, f)
@@ -89,7 +89,7 @@ def fast_delete(save_dir):
     subprocess.run(["rm", "-rf", str(save_dir)], check=True)
 
 def run_inference_sliding(model, test_dset, exposure, ckpt_dir, results_root,
-                        batch_size=32, num_workers=4, dataset="HT_LIF24"):
+                        batch_size=32, num_workers=4, dataset="PAVIA_ATN"):
     """
     Run model inference on the test dataset, predict all tiles, and save them as .npy files.
     Does NOT check for existing predictions and does NOT stitch.
@@ -143,7 +143,7 @@ def stitch_predictions_from_dir_only(
     exposure,
     ckpt_dir,
     results_root,
-    dataset = "HT_LIF24",
+    dataset = "PAVIA_ATN",
     pred_dir_name=None,
     use_memmap=True,
     digits=10,
@@ -193,7 +193,7 @@ def stitch_predictions_from_dir_only(
 if __name__ == "__main__":
     import argparse
 
-    parser = argparse.ArgumentParser(description="Run HT_LIF24 LVAE inference")
+    parser = argparse.ArgumentParser(description="Run PAVIA_ATN LVAE inference")
     parser.add_argument("--exposure", type=str, default="5ms", help="Exposure duration (e.g. 2ms, 5ms, 20ms)")
     parser.add_argument("--num_channels", type=int, default=2, help="Number of channels (2, 3, or 4)")
     parser.add_argument("--reduce_dataset_size", action="store_true", help="Reduce dataset size for quick testing but only for val_dset or test_dset based on what you selected earlier") #!Reduce Dataset Size is set as True by default
@@ -213,7 +213,7 @@ if __name__ == "__main__":
     # Setup environment
     # -------------------------------------------------------------------------
 
-    model, config, (train_dset, val_dset, test_dset), ckpt_dir = setup_environment_HT_LIF24(
+    model, config, (train_dset, val_dset, test_dset), ckpt_dir = setup_environment_PAVIA_ATN(
         exposure_duration=args.exposure,
         num_channels=args.num_channels,
         sliding_window_flag=args.sliding_window_flag,

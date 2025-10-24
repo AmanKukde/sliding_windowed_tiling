@@ -101,9 +101,22 @@
             "--channel", "1",
             "--kl_start", "29",
             "--kl_end", "33",
-            "--all"
         ]
-    }
+    },
+    {
+        "name": "Debug analysis_runner",
+        "type": "debugpy",
+        "request": "launch",
+        "program": "/home/aman.kukde/sliding_windowed_tiling/analysis/analysis_runner.py",
+        "args": [
+            "--model_name","microsplit",
+            "--results_base", "/group/jug/aman/temp/",
+            "--save_base", "./local_temp_dir/",
+            "--python_bin", "python3.10",
+            "--hpc"
+        ],
+        "console": "integratedTerminal"
+        }
 
     ]
 }

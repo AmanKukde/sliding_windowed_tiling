@@ -463,7 +463,7 @@ def full_frame_evaluation(
 
             text_weight = 'normal'
             # Only bold if the current value is strictly greater than the other value
-            if current_value > other_value:
+            if round(current_value, 2) > round(other_value, 2):
                 text_weight = 'bold'
             
             ax.text(0.5, y_position + ( (len(metric_names) - 1) / 2 - i) * line_spacing,

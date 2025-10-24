@@ -8,3 +8,10 @@
 *.pkl
 *.tiff
 *.DS_Store
+*.yaml
+*.csv
+*.txt
+*.sh
+*.json
+.gitignore
+.vscode/launch.json

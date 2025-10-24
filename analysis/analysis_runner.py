@@ -16,6 +16,7 @@ from concurrent.futures import ProcessPoolExecutor, as_completed
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Run batch analysis on multiple results.")
+    parser.add_argument("--model_name", required=True, choices=["usplit", "microsplit"])
     parser.add_argument("--results_base", default="/group/jug/aman/usplit_13Oct25/")
     parser.add_argument("--project_dir", default="/home/aman.kukde/sliding_windowed_tiling/")
     parser.add_argument("--save_base", default="/group/jug/aman/usplit_analysis_results_16Oct25/")
@@ -24,7 +25,7 @@ def parse_args():
     parser.add_argument("--dry_run", action="store_true")
     parser.add_argument("--gradient_based_analysis", action="store_true")
     parser.add_argument("--qualitative_analysis", action="store_true")
-    parser.add_argument("--all", action="store_false")
+    parser.add_argument("--all", type = bool, default = False, help="Run all analyses if no flags specified")
     parser.add_argument("--hpc", action="store_false", help="Submit analysis jobs to HPC using SLURM")
     parser.add_argument("--partition", default="gpuq", help="SLURM partition for HPC jobs")
     parser.add_argument("--gpus", type=int, default=1)
@@ -79,11 +80,12 @@ def run_local(pair, args):
     analyze_script = Path(args.project_dir) / "analysis" / "analyze_experiment.py"
     cmd = [
         args.python_bin, str(analyze_script),
+        "--model_name", args.model_name,
         "--dataset", dataset,
         "--pred_sw", sw_path,
         "--pred_og", og_path,
         "--save_dir", str(save_dir),
-        "--tile_size", "32",
+        "--inner_tile_size", "32",
         "--bins", "200",
         "--channel", "all",
         "--kl_start", "29",
@@ -123,7 +125,7 @@ def run_hpc(pair, args):
     jobname = f"grad_{dataset}_{modality}_{lc}"
     sbatch_file = save_dir / f"sbatch_{jobname}.sh"
 
-    cmd = f"{args.python_bin} {analyze_script} --dataset {dataset} --pred_sw {sw_path} --pred_og {og_path} --save_dir {save_dir} --tile_size 32 --bins 200 --channel 'all' --kl_start 29 --kl_end 33"
+    cmd = f"{args.python_bin} {analyze_script} --dataset {dataset} --pred_sw {sw_path} --pred_og {og_path} --save_dir {save_dir} --inner_tile_size 32 --bins 200 --channel 'all' --kl_start 29 --kl_end 33"
     if args.gradient_based_analysis:
         cmd += " --gradient_based_analysis"
     if args.qualitative_analysis:
@@ -161,17 +163,22 @@ def main():
     args = parse_args()
     results_base = Path(args.results_base)
     save_base = Path(args.save_base)
+    log_file_path = save_base / "analysis_logs" 
     save_base.mkdir(parents=True, exist_ok=True)
+    log_file_path.mkdir(parents=True, exist_ok=True)
 
     timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-    log_file = save_base / f"run_log_{timestamp}.log"
+    log_file = log_file_path / f"run_log_{timestamp}.log"
 
     print(f"🔍 Scanning for prediction pairs in {results_base}")
     pairs = find_prediction_pairs(results_base)
     print(f"Found {len(pairs)} valid SW–OG pairs.")
     if not pairs: return
 
-    selected_pairs = select_pairs_interactively(pairs)
+    # selected_pairs = select_pairs_interactively(pairs)
+    selected_pairs = pairs #!AMAN TESTING
+    
+    print(f"Selected {len(selected_pairs)} pairs for analysis.")
     results = []
 
     if args.hpc:
