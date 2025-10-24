@@ -13,5 +13,4 @@
 *.txt
 *.sh
 *.json
-.gitignore
 .vscode/launch.json
