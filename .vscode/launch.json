@@ -116,7 +116,19 @@
             "--hpc"
         ],
         "console": "integratedTerminal"
-        }
+        },
+    {
+      "name": "Run CAREamics VAE Prediction",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/HDN/predict.py",
+      "console": "integratedTerminal",
+      "args": [
+        "--checkpoint_path", "/group/jug/Vera/projects/dexm_checkpoints/best.ckpt",
+        "--data_folder", "/group/jug/Vera/datasets/OC2/dexm/clean_fov/val/synth",
+        "--result_folder", "/group/jug/Vera/datasets/OC2/dexm/clean_fov/val/predicted",
+      ]
+    }
 
     ]
 }

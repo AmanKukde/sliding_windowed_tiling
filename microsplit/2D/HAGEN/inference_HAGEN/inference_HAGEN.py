@@ -9,13 +9,13 @@ from tqdm import tqdm
 from torch.utils.data import DataLoader
 import subprocess
 
-from train_setup_ht_lif24 import setup_environment_HT_LIF24
+from train_setup_HAGEN import setup_environment_HAGEN
 from careamics.lvae_training.eval_utils import (
-    stitch_and_crop_predictions_inner_tile_from_dir,
     get_predictions,
 )
 from usplit.core.tiff_reader import save_tiff
-
+from careamics.lvae_training.eval_utils import (
+    stitch_predictions_windowed)
 
 # -----------------------------------------------------------------------------
 # Utility functions
@@ -45,13 +45,11 @@ def run_inference_original(
     model,
     train_dset,
     test_dset,
-    exposure,
-    ckpt_dir,
     batch_size=128,
     num_workers=6,
     mmse_count=64,
     grid_size=32,
-    results_root="./results_HT_LIF24",
+    results_root="./results_HAGEN",
 ):
     print("🚀 Running inference (non-sliding mode)...")
     stitched_predictions_, stitched_stds_ = get_predictions(
@@ -65,19 +63,19 @@ def run_inference_original(
         sliding_window_flag=False,
     )
 
-    def process_preds(stitched_predictions, stitched_stds, dset, key, TARGET_CHANNEL_IDX_LIST=[0, 1]):
+    def process_preds(stitched_predictions, stitched_stds, train_dset, key, TARGET_CHANNEL_IDX_LIST=[0, 1]):
         stitched_predictions = stitched_predictions[key][..., : len(TARGET_CHANNEL_IDX_LIST)]
         stitched_stds = stitched_stds[key][..., : len(TARGET_CHANNEL_IDX_LIST)]
-        mean_params, std_params = dset.get_mean_std()
+        mean_params, std_params = train_dset.get_mean_std()
         unnorm = (
             stitched_predictions * std_params["target"].squeeze().reshape(1, 1, 1, -1)
             + mean_params["target"].squeeze().reshape(1, 1, 1, -1)
         )
         return unnorm
 
-    stitched_predictions = process_preds(stitched_predictions_, stitched_stds_, train_dset, key = exposure)
+    stitched_predictions = process_preds(stitched_predictions_, stitched_stds_, train_dset, key = test_dset._fpath.name)
 
-    save_dir = get_save_dir(results_root, dataset="HT_LIF24")
+    save_dir = get_save_dir(results_root, dataset="HAGEN")
     save_tiff(save_dir / "pred_test_dset_microsplit_og.tiff", stitched_predictions.transpose(0, 3, 1, 2))
     with open(save_dir / "pred_test_dset_microsplit_og.pkl", "wb") as f:
         dill.dump(stitched_predictions, f)
@@ -88,8 +86,8 @@ def run_inference_original(
 def fast_delete(save_dir):
     subprocess.run(["rm", "-rf", str(save_dir)], check=True)
 
-def run_inference_sliding(model, test_dset, exposure, ckpt_dir, results_root,
-                        batch_size=32, num_workers=4, dataset="HT_LIF24"):
+def run_inference_sliding(model, test_dset, results_root,
+                        batch_size=32, num_workers=4, dataset="HAGEN"):
     """
     Run model inference on the test dataset, predict all tiles, and save them as .npy files.
     Does NOT check for existing predictions and does NOT stitch.
@@ -133,14 +131,49 @@ def run_inference_sliding(model, test_dset, exposure, ckpt_dir, results_root,
                 pred_path =  raw_pred_path / f"pred_{global_idx:010d}.npy"
                 np.save(pred_path, rec_np[i])
                 global_idx += 1
-                
+                yield rec_np[i]                
     print(f"✅ Saved {global_idx} prediction tiles to {save_dir}")
 
+def run_inference_sliding_and_stitch(
+    model,
+    train_dset,
+    test_dset,
+    batch_size=128,
+    num_workers=4,
+    results_root="./results_HAGEN",
+    dataset="HAGEN",
+):
+    """
+    Run sliding-window inference and stitch predictions.
+    """
+    prediction_generator = run_inference_sliding(
+        model,
+        test_dset,
+        batch_size=batch_size,
+        num_workers=num_workers,
+        results_root=results_root,
+        dataset=dataset,
+    )
+    save_dir = get_save_dir(results_root,dataset)
+
+    stitched_predictions, coverage_mask = stitch_predictions_windowed(prediction_generator,test_dset,len(test_dset),inner_fraction=0.5)
+
+    mean_params, std_params = train_dset.get_mean_std()
+    stitched_predictions = (
+        stitched_predictions * std_params["target"].squeeze().reshape(1, 1, 1, -1)
+        + mean_params["target"].squeeze().reshape(1, 1, 1, -1)
+    )
+
+    save_tiff(save_dir / "pred_test_dset_microsplit_stitched.tiff", stitched_predictions.transpose(0, 3, 1, 2))
+    with open(save_dir / "pred_test_dset_microsplit_stitched.pkl", "wb") as f:
+        dill.dump(stitched_predictions, f)
+
+    print(f"✅ Saved stitched predictions to {save_dir}")
 
 def stitch_predictions_from_dir_only(
     train_dset,
     test_dset,
-    results_root,
+    results_root, 
     dataset = "HT_LIF24",
     pred_dir_name=None,
     use_memmap=True,
@@ -191,7 +224,7 @@ def stitch_predictions_from_dir_only(
 if __name__ == "__main__":
     import argparse
 
-    parser = argparse.ArgumentParser(description="Run HT_LIF24 LVAE inference")
+    parser = argparse.ArgumentParser(description="Run HAGEN LVAE inference")
     parser.add_argument("--exposure", type=str, default="5ms", help="Exposure duration (e.g. 2ms, 5ms, 20ms)")
     parser.add_argument("--num_channels", type=int, default=2, help="Number of channels (2, 3, or 4)")
     parser.add_argument("--reduce_dataset_size", action="store_true", help="Reduce dataset size for quick testing but only for val_dset or test_dset based on what you selected earlier") #!Reduce Dataset Size is set as True by default
@@ -211,12 +244,8 @@ if __name__ == "__main__":
     # Setup environment
     # -------------------------------------------------------------------------
 
-    model, config, (train_dset, val_dset, test_dset), ckpt_dir = setup_environment_HT_LIF24(
-        exposure_duration=args.exposure,
-        num_channels=args.num_channels,
+    model, config, (train_dset, val_dset, test_dset), ckpt_dir = setup_environment_HAGEN(
         sliding_window_flag=args.sliding_window_flag,
-        pretrained=args.load_pretrained_ckpt,
-        reduce_dataset_size=args.reduce_dataset_size,
     )
 
     # -------------------------------------------------------------------------
@@ -236,22 +265,13 @@ if __name__ == "__main__":
         )
     elif args.sliding_window_flag:
         print("🪟 Running sliding-window inference + stitching")
-        run_inference_sliding(
+        run_inference_sliding_and_stitch(
             model,
+            train_dset,
             test_dset,
-            args.exposure,
-            ckpt_dir,
             batch_size=args.batch_size,
             num_workers=args.num_workers,
             results_root=args.results_root,
-        )
-        stitch_predictions_from_dir_only(
-            train_dset,
-            test_dset,
-            results_root=args.results_root,
-            pred_dir_name=args.raw_preds_dir,
-            batch_size=args.batch_size,
-            channels = args.num_channels,
         )
     else:
         print("🎯 Running standard inference")
@@ -259,8 +279,6 @@ if __name__ == "__main__":
             model,
             train_dset,
             test_dset,
-            args.exposure,
-            ckpt_dir,
             batch_size=args.batch_size,
             num_workers=args.num_workers,
             mmse_count=args.mmse_count,

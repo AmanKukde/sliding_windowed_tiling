@@ -3,6 +3,8 @@
     "python-envs.defaultPackageManager": "ms-python.python:conda",
     "python-envs.pythonProjects": [],
     "python.analysis.extraPaths": [
-        "./analysis/utils"
+        "./analysis/utils",
+        "./microsplit/2D/HT_LIF24",
+        "./testing_folder"
     ]
 }
