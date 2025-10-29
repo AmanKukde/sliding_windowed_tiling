@@ -16,8 +16,8 @@ class GradientUtils2D:
             bin_edges (numpy array, optional): bin edges for histograms. If None, computed from gradients.
         """
         self.imgs = imgs
-        self.tile_size = tile_size
-        self.border_size = border_size if border_size is not None else tile_size // 2
+        self.tile_size = tile_size[0] if isinstance(tile_size, (list, tuple, np.ndarray)) else tile_size
+        self.border_size = border_size if border_size is not None else tile_size[0] // 2
 
         # remove border artefacts
         self.imgs_without_borders = GradientUtils2D.border_free(self.imgs, self.border_size)
@@ -140,9 +140,6 @@ class GradientUtils2D:
                   histogram_middle - histogram_edges]:
             scores.append(GradientUtils2D.wiener_entropy(x, eps=eps))
         return scores
-    
-import numpy as np
-
 class GradientUtils3D:
     """
     Class to compute 3D tiling statistics such as gradient histograms and peakiness scores
@@ -163,7 +160,9 @@ class GradientUtils3D:
         self.imgs = imgs
         self.tile_size = np.array(tile_size)
         if border_size is None:
-            self.border_size = self.tile_size // 2
+            # self.border_size = self.tile_size // 2
+            self.border_size = [s//2 for s in self.tile_size]
+            self.border_size = [0, 16, 16]
         else:
             self.border_size = np.array(border_size)
 
@@ -190,12 +189,16 @@ class GradientUtils3D:
         self.histogram_middle = GradientUtils3D.compute_histograms(self.grad_middle, self._bin_edges)
 
     # ---------- STATIC METHODS ----------
-
     @staticmethod
     def border_free(imgs: np.ndarray, border_size):
         """Remove borders from a 3D image [B, Z, Y, X, C]."""
         bz, by, bx = border_size
-        return imgs[:, bz:-bz, by:-by, bx:-bx, :]
+
+        z_slice = slice(bz, -bz if bz != 0 else None)
+        y_slice = slice(by, -by if by != 0 else None)
+        x_slice = slice(bx, -bx if bx != 0 else None)
+
+        return imgs[:, z_slice, y_slice, x_slice, :]
 
     @staticmethod
     def compute_gradients(imgs: np.ndarray, border_size):
@@ -291,6 +294,5 @@ class GradientUtils3D:
             raise TypeError("position must be string, int, or tuple/list of ints")
 
         return self._gradients_along_tile_grid(offset, channels=channels)
-
 
 

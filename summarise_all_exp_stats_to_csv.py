@@ -1,18 +1,11 @@
 import pandas as pd
 from pathlib import Path
 import ast
-import argparse
-
-
-def parse_args():
-    parser = argparse.ArgumentParser(description="Run batch analysis on multiple results.")
-    parser.add_argument("--save_base", default="/group/jug/aman/experiment_analysis_results")
-    return parser.parse_args()
-
 
 def summarize_all_experiments(base_dir, output_excel="summary_results.xlsx"):
     """
-    Traverse experiment analysis results and compile OG/WIN stats into one Excel file.
+    Traverse experiment analysis results in base/dataset/ structure
+    and compile OG/WIN stats into one Excel file.
     Adds a second sheet with averages across channels.
     """
     base_dir = Path(base_dir)
@@ -21,9 +14,9 @@ def summarize_all_experiments(base_dir, output_excel="summary_results.xlsx"):
 
     for csv_path in base_dir.rglob("stats_og_*.csv"):
         dataset_name = csv_path.stem.replace("stats_og_", "")
-        lc_dir = csv_path.parent
+        dataset_dir = csv_path.parent
 
-        win_path = lc_dir / f"stats_win_{dataset_name}.csv"
+        win_path = dataset_dir / f"stats_win_{dataset_name}.csv"
         if not win_path.exists():
             print(f"⚠️ Missing WIN file for: {csv_path}")
             continue
@@ -31,19 +24,17 @@ def summarize_all_experiments(base_dir, output_excel="summary_results.xlsx"):
         df_og = pd.read_csv(csv_path, index_col=0)
         df_win = pd.read_csv(win_path, index_col=0)
 
-        # Extract identifiers
-        try:
-            dataset = csv_path.parts[-4]
-            modality = csv_path.parts[-3]
-            lc_type = csv_path.parts[-2]
-        except IndexError:
-            dataset, modality, lc_type = "Unknown", "Unknown", "Unknown"
+        # --- Extract identifiers for base/dataset/ structure ---
+        dataset = dataset_dir.name
+        modality = "Unknown"
+        lc_type = "Unknown"
 
+        # Helper to parse tuple/list strings
         def parse_tuple_string(s):
             try:
                 val = ast.literal_eval(s)
                 if isinstance(val, list) and len(val) == 2 and isinstance(val[0], tuple):
-                    return [x[0] for x in val]  # mean values only
+                    return [x[0] for x in val]  # take mean values
                 return val
             except Exception:
                 return [None, None]
@@ -85,8 +76,8 @@ def summarize_all_experiments(base_dir, output_excel="summary_results.xlsx"):
         avg_rows.append(avg_record)
 
     # Combine into DataFrames
-    summary_df = pd.DataFrame(summary_rows).sort_values(by=["Dataset", "Modality", "LC_Type"], ignore_index=True)
-    avg_df = pd.DataFrame(avg_rows).sort_values(by=["Dataset", "Modality", "LC_Type"], ignore_index=True)
+    summary_df = pd.DataFrame(summary_rows)#.sort_values(by=["Dataset"], ignore_index=True)
+    avg_df = pd.DataFrame(avg_rows)#sort_values(by=["Dataset"], ignore_index=True)
 
     # Save to Excel with two sheets
     output_path = Path(base_dir) / output_excel
@@ -101,6 +92,6 @@ def summarize_all_experiments(base_dir, output_excel="summary_results.xlsx"):
 if __name__ == "__main__":
     # args = parse_args()
     summary_df, avg_df = summarize_all_experiments(
-        base_dir="./local_temp_dir",
+        base_dir="/group/jug/aman/Analysis_Results_29Oct25_bin50/",
         output_excel="consolidated_experiments_summary.xlsx"
     )

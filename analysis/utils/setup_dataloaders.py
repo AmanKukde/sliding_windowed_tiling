@@ -48,10 +48,11 @@ def setup_dataset_usplit(dataset_name, img_sz=64, sliding_window_flag=False):
         load_data_func=get_train_val_data
     )
 
+    # return model, experiment_config, (train_dset, val_dset, test_dset), selected_ckpt
     return test_dset
 
 
-def setup_dataset_microsplit_HT_LIF24(
+def setup_dataset_HT_LIF24(
     exposure_duration: str = "5ms",
     num_channels: int = 2,
     sliding_window_flag: bool = False,
@@ -116,11 +117,12 @@ def setup_dataset_microsplit_HT_LIF24(
         test_config=test_data_config,
         load_data_func=get_train_val_data,
     )
+    model = None
+    experiment_config = None
+    selected_ckpt = None
+    return model, experiment_config, train_dset, val_dset, test_dset
     
-    return test_dset
-    
-
-def setup_dataset_microsplit_HT_H24(sliding_window_flag=False):
+def setup_dataset_HT_H24(sliding_window_flag=False):
     
     from microsplit_reproducibility.configs.parameters.HT_H24 import get_microsplit_parameters
     from microsplit_reproducibility.configs.data.HT_H24 import get_data_configs
@@ -161,10 +163,54 @@ def setup_dataset_microsplit_HT_H24(sliding_window_flag=False):
         test_config=val_data_config,
         load_data_func=get_train_val_data,
     )
-    
-    return test_dset
+    MODEL_CHECKPOINTS = pooch.create(
+    path=f"/group/jug/aman/Datasets/HT_H24/pretrained_checkpoints/",
+    base_url=f"https://download.fht.org/jug/msplit/ht_h24/ckpts/",
+    registry={f"best.ckpt": None},
+)
 
-def setup_environment_PAVIA_ATN(
+    pretrained_model_available = False
+    for f in MODEL_CHECKPOINTS.registry:
+        if MODEL_CHECKPOINTS.is_available(f):
+            MODEL_CHECKPOINTS.fetch(f"{f}", progressbar=True)
+            pretrained_model_available = True
+
+    assert pretrained_model_available, "No suitable pretrained model for your data seems to be available.\nPlease train the model using the notebook '01_train.ipynb'."
+    ckpt_folder = '/group/jug/aman/Datasets/HT_H24/pretrained_checkpoints/'
+
+    selected_ckpt = load_checkpoint_path(str(ckpt_folder), best=True)
+    
+    experiment_params["data_stats"] = data_stats
+
+    # setting up model config (using default parameters)
+    model_config = get_model_config(**experiment_params)
+    # making our data_stats known to the experiment (model) we prepare
+    experiment_params["data_stats"] = data_stats
+
+    # setting up model config (using default parameters)
+    model_config = get_model_config(**experiment_params)
+
+    # NOTE: The creation of the following configs are not strictly necessary for prediction,
+    #     but they ARE currently expected by the create_algorithm_config function below.
+    #     They act as a placeholder for now and we will work to remove them in a following release
+    loss_config = get_loss_config(**experiment_params)
+    gaussian_lik_config, noise_model_config, nm_lik_config = get_likelihood_config(
+        **experiment_params
+    )
+
+    # finally, assemble the full set of experiment configurations...
+    experiment_config = create_algorithm_config(
+        algorithm=experiment_params["algorithm"],
+        loss_config=loss_config,
+        model_config=model_config,
+        gaussian_lik_config=gaussian_lik_config,
+        nm_config=noise_model_config,
+        nm_lik_config=nm_lik_config,
+    )
+    model = VAEModule(algorithm_config=experiment_config)
+    return model, experiment_config,train_dset, val_dset, test_dset
+
+def setup_dataset_PAVIA_ATN(
     sliding_window_flag: bool = False,
 ):
     """
@@ -187,7 +233,7 @@ def setup_environment_PAVIA_ATN(
     # -------------------------------------------------------------------------
 
     DATA_PATH = Path("/group/jug/aman/Datasets/PAVIA_ATN/")
-    NM_PATH = Path("./noise_models/")
+    NM_PATH = Path("/group/jug/aman/Consolidated_Results_26Oct25/PAVIA_ATN/noise_models/")
     
     NUM_CHANNELS = 2
     """The number of channels considered for the splitting task."""
@@ -262,12 +308,12 @@ def setup_environment_PAVIA_ATN(
         print("⚠️ Model created without pretrained weights.")
 
     model.eval()
-    model.cuda()
+    model.cpu()
 
     print("✅ Environment setup complete.")
-    return model, experiment_config, (train_dset, val_dset, test_dset), selected_ckpt
+    return model, experiment_config, train_dset, val_dset, test_dset
 
-def setup_environment_HAGEN(
+def setup_dataset_HAGEN(
     sliding_window_flag: bool = False,
 ):
     """
@@ -290,7 +336,7 @@ def setup_environment_HAGEN(
     # -------------------------------------------------------------------------
 
     DATA_PATH = Path("/group/jug/aman/Datasets/Hagen/")
-    NM_PATH = Path("./noise_models/")
+    NM_PATH = Path("/group/jug/aman/Consolidated_Results_26Oct25/HAGEN/noise_models/")
     
     NUM_CHANNELS = 2
     """The number of channels considered for the splitting task."""
@@ -367,5 +413,5 @@ def setup_environment_HAGEN(
     model.cuda()
 
     print("✅ Environment setup complete.")
-    return model, experiment_config, (train_dset, val_dset, test_dset), selected_ckpt
+    return model, experiment_config, train_dset, val_dset, test_dset
 

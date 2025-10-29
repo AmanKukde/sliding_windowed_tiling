@@ -4,7 +4,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from pathlib import Path
 from usplit.core.psnr import RangeInvariantPsnr as psnr
-from utils.gradient_utils import GradientUtils
+from utils.gradient_utils import GradientUtils2D as GradientUtils
 from utils.plot_utils import (
     plot_multiple_hist,
     plot_multiple_bar,
@@ -79,8 +79,8 @@ def summarize_gradients(grad_utils_og, grad_utils_sw, bin_edges, channel, save_d
     fig.savefig(Path(save_dir) / "gradient_histograms_comparison.png", dpi=300, bbox_inches='tight')
     plt.close(fig)
 
-    # 2️⃣ Plot bar charts with differences (like your notebook)
-    fig, ax = plt.subplots(4, 1, figsize=(25, 12))
+    # 2ï¸âƒ£ Plot bar charts with differences (like your notebook)
+    fig, ax = plt.subplots(4, 1, figsize=(17, 12))
     
     plot_multiple_bar(
         ax[0],
@@ -126,7 +126,7 @@ def summarize_gradients(grad_utils_og, grad_utils_sw, bin_edges, channel, save_d
     fig.savefig(Path(save_dir) / "gradient_bar_charts.png", dpi=300, bbox_inches='tight')
     plt.close(fig)
 
-    # 3️⃣ KL divergence heatmaps
+    # 3ï¸âƒ£ KL divergence heatmaps
     fig_kl = plot_kl_heatmaps_for_range(
         [grad_utils_og, grad_utils_sw],
         bin_edges,
@@ -139,12 +139,12 @@ def summarize_gradients(grad_utils_og, grad_utils_sw, bin_edges, channel, save_d
         fig_kl.savefig(Path(save_dir) / "kl_heatmaps.png", dpi=300, bbox_inches='tight')
         plt.close(fig_kl)
 
-    # 4️⃣ Compute peakiness scores
+    # 4ï¸âƒ£ Compute peakiness scores
     peakiness_og = grad_utils_og.get_peakiness_scores(h_edge_og, h_mid_og)[-1]
     peakiness_sw = grad_utils_sw.get_peakiness_scores(h_edge_sw, h_mid_sw)[-1]
     peakiness_delta =  peakiness_og - peakiness_sw
 
-    # 5️⃣ KL divergence summary
+    # 5ï¸âƒ£ KL divergence summary
     kl_edge_mid_og = compute_kl_matrix([h_edge_og, h_mid_og])
     kl_edge_mid_sw = compute_kl_matrix([h_edge_sw, h_mid_sw])
 
@@ -155,11 +155,11 @@ def summarize_gradients(grad_utils_og, grad_utils_sw, bin_edges, channel, save_d
         f.write("Peakiness Scores (Lower is better):\n")
         f.write(f"  Original Method: {peakiness_og:.6f}\n")
         f.write(f"  Sliding Window Method: {peakiness_sw:.6f}\n")
-        f.write(f"  Δ (OG - SW): {peakiness_delta:.6f}\n")
+        f.write(f"  Î” (OG - SW): {peakiness_delta:.6f}\n")
         if peakiness_delta > 0:
             f.write("  ✅ Sliding Window Method performs better (lower peakiness)\n")
         else:
-            f.write("  ❌ Original Method performs better (lower peakiness)\n")
+            f.write("  âŒ Original Method performs better (lower peakiness)\n")
         f.write(f"\nKL Divergence OG (edge vs mid): {kl_edge_mid_og[0,1]:.6f}\n")
         f.write(f"KL Divergence SW (edge vs mid): {kl_edge_mid_sw[0,1]:.6f}\n")
 
@@ -181,12 +181,12 @@ def compute_psnr_and_plot(pred_sw, pred_og, target, save_dir):
 
     fig, ax = plt.subplots(figsize=(6, 4))
     ax.bar(["OG", "SW"], [psnr_og, psnr_sw], color=["gray", "orange"])
-    ax.set_title(f"PSNR Comparison (Δ={delta:.2f})")
+    ax.set_title(f"PSNR Comparison (Î”={delta:.2f})")
     ax.set_ylabel("PSNR (dB)")
     fig.savefig(Path(save_dir) / "psnr_comparison.png", dpi=300)
     plt.close(fig)
 
     with open(Path(save_dir) / "psnr_summary.txt", "w") as f:
-        f.write(f"OG PSNR: {psnr_og:.4f}\nSW PSNR: {psnr_sw:.4f}\nΔ: {delta:.4f}\n")
+        f.write(f"OG PSNR: {psnr_og:.4f}\nSW PSNR: {psnr_sw:.4f}\nÎ”: {delta:.4f}\n")
 
     print(f"✅ PSNR analysis saved to {save_dir}")

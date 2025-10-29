@@ -18,7 +18,7 @@ from utils.plot_utils import (
     plot_avg_psnr_zoomed,
     plot_all_psnr
 )
-from utils.gradient_utils import GradientUtils
+
 from utils.analysis_utils import summarize_gradients
 from microsplit_reproducibility.notebook_utils.custom_dataset_2D import get_input, get_target
 
@@ -75,6 +75,10 @@ def compute_and_save_stats(tar, img_og, img_sw, save_dir, dataset_name):
 # Analyses
 # ------------------------------
 def run_gradient_based_analysis(img_sw, img_og, save_dir, inner_tile_size=32, bins=200, channel=1, kl_start=29, kl_end=33):
+    if len(img_sw.shape) == 4:
+        from utils.gradient_utils import GradientUtils2D as GradientUtils
+    else:
+        from utils.gradient_utils import GradientUtils3D as GradientUtils
     grad_sw = GradientUtils(img_sw, tile_size=inner_tile_size)
     grad_og = GradientUtils(img_og, tile_size=inner_tile_size)
     bin_edges = grad_sw.make_bin_edges(n_bins=bins)
@@ -98,7 +102,7 @@ def run_qualitative_analysis(test_dset, img_sw, img_og, save_dir, dataset_name):
         inp = inp[..., test_dset._tar_idx_list]
     stats_og, stats_win = compute_and_save_stats(tar, img_og, img_sw, save_dir, dataset_name)
 
-    if tar.shape.n_dims == 4:
+    if len(tar.shape) == 4:
         # # --- PSNR analysis ---
         psnr_df, avg_psnr_df = compute_psnr_and_plot(tar, img_og, img_sw, save_dir)
 
@@ -119,6 +123,11 @@ def run_qualitative_analysis(test_dset, img_sw, img_og, save_dir, dataset_name):
                 titles=["Sliding Window", "Original"],
                 save_path=frame_dir / f"{idx+1}.png"
             )
+def parse_list_input(value):
+    try:
+        return [int(value)]
+    except ValueError:
+        return [int(v) for v in value.split(",")]
 # ------------------------------
 # Main
 # ------------------------------
@@ -129,7 +138,7 @@ def main():
     parser.add_argument("--pred_sw", required=True, help="Sliding window predictions (.tiff/.pkl)")
     parser.add_argument("--pred_og", required=True, help="Original predictions (.tiff/.pkl)")
     parser.add_argument("--save_dir", required=True, help="Directory to save plots and stats")
-    parser.add_argument("--inner_tile_size", type=int, default=64)
+    parser.add_argument("--inner_tile_size", type = parse_list_input, default=[32,32])
     parser.add_argument("--bins", type=int, default=100)
     parser.add_argument("--kl_start", type=int, default=29)
     parser.add_argument("--kl_end", type=int, default=33)
@@ -177,17 +186,21 @@ def main():
     if run_qualitative:
         if args.model_name == "usplit":
             from utils.setup_dataloaders import setup_dataset_usplit as setup_dataset
-        elif args.model_name == "microsplit ht_lif24":
-            from utils.setup_dataloaders import setup_dataset_microsplit_HT_LIF24 as setup_dataset
         elif args.model_name == "microsplit":
-            from utils.setup_dataloaders import setup_dataset_microsplit_HT_H24 as setup_dataset
+            if args.dataset == "HT_LIF24":
+                from utils.setup_dataloaders import setup_dataset_HT_LIF24 as setup_dataset
+            elif args.dataset == "HT_H24":
+                from utils.setup_dataloaders import setup_dataset_HT_H24 as setup_dataset
+            elif args.dataset == "PAVIA_ATN":
+                from utils.setup_dataloaders import setup_dataset_PAVIA_ATN as setup_dataset
+            elif args.dataset == "HAGEN":
+                from utils.setup_dataloaders import setup_dataset_HAGEN as setup_dataset
         else:
             raise ValueError(f"Unknown model name: {args.model_name}")
-        test_dset = setup_dataset()
+        *_, test_dset = setup_dataset()
         print("Running qualitative analysis (PSNR, metrics, frame plots)...")
         run_qualitative_analysis(test_dset, img_sw, img_og, save_dir, args.dataset)
 
 if __name__ == "__main__":
     main()
-
 

@@ -4,8 +4,6 @@
     // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
     "version": "0.2.0",
     "configurations": [
-
-
         {
             "name": "Python Debugger: Current File",
             "type": "debugpy",
@@ -109,11 +107,10 @@
         "request": "launch",
         "program": "/home/aman.kukde/sliding_windowed_tiling/analysis/analysis_runner.py",
         "args": [
-            "--model_name","microsplit",
-            "--results_base", "/group/jug/aman/temp/",
-            "--save_base", "./local_temp_dir/",
-            "--python_bin", "python3.10",
-            "--hpc"
+            "--model-name","microsplit",
+            "--results-base", "/group/jug/aman/Consolidated_Results_26Oct25/",
+            "--save-base", "/group/jug/aman/Analysis_Results_29Oct25_bin50/",
+            "--python-bin", "python3.10",
         ],
         "console": "integratedTerminal"
         },
@@ -128,7 +125,67 @@
         "--data_folder", "/group/jug/Vera/datasets/OC2/dexm/clean_fov/val/synth",
         "--result_folder", "/group/jug/Vera/datasets/OC2/dexm/clean_fov/val/predicted",
       ]
-    }
+    },
+    {
+      "name": "Analyze Microsplit HT_H24",
+      "type": "debugpy",
+      "request": "launch",
+      "python": "python3.10",
+      "program": "${env:HOME}/sliding_windowed_tiling/analysis/analyze_experiment.py",
+      "args": [
+        "--model_name", "microsplit",
+        "--dataset", "HT_H24",
+        "--pred_sw", "/group/jug/aman/temp/HT_H24/pred_test_dset_microsplit_stitched.pkl",
+        "--pred_og", "/group/jug/aman/temp/HT_H24/pred_test_dset_microsplit_og.pkl",
+        "--save_dir", "/group/jug/aman/Analysis_Results28Oct25_bin50/HT_H24",
+        "--inner_tile_size", "9,32,32",
+        "--bins", "50",
+        "--channel", "all",
+        "--kl_start", "29",
+        "--kl_end", "33",
+        "--gradient_based_analysis", "True",
+        "--qualitative_analysis", "True"
+      ],
+      "console": "integratedTerminal",
+      "cwd": "${env:HOME}/sliding_windowed_tiling"
+    },
+    {
+      "name": "Analyze Microsplit PAVIA_ATN",
+      "type": "debugpy",
+      "request": "launch",
+      "python": "python3.10",
+      "program": "${env:HOME}/sliding_windowed_tiling/analysis/analyze_experiment.py",
+      "args": [
+        "--model_name", "microsplit",
+        "--dataset", "PAVIA_ATN",
+        "--pred_sw", "/group/jug/aman/temp/PAVIA_ATN/pred_test_dset_microsplit_stitched.pkl",
+        "--pred_og", "/group/jug/aman/temp/PAVIA_ATN/pred_test_dset_microsplit_og.pkl",
+        "--save_dir", "/group/jug/aman/Analysis_Results28Oct25_bin50/PAVIA_ATN",
+        "--inner_tile_size", "32",
+        "--bins", "2000",
+        "--channel", "all",
+        "--kl_start", "29",
+        "--kl_end", "33",
+        "--gradient_based_analysis", "True",
+        "--qualitative_analysis", "True"
+      ],
+      "console": "integratedTerminal",
+      "cwd": "${env:HOME}/sliding_windowed_tiling"
+    },
+    {
+        "name": "Run Inference Pavia",
+        "type": "debugpy",
+        "request": "launch",
+        "program": "${env:HOME}/sliding_windowed_tiling/microsplit/2D/PAVIA_ATN/inference_pavia/inference_pavia.py",
+        "console": "integratedTerminal",
+        "python": "python3.10",
+        "args": [
+            "--sliding_window_flag",
+            "--stitch_only",
+            "--batch_size", "128",
+            "--results_root", "/group/jug/aman/microsplit_pavia_26Oct25/"
+        ],
+    },
 
     ]
 }

@@ -6,7 +6,7 @@ from scipy.stats import norm, t
 from matplotlib.gridspec import GridSpec
 from microsplit_reproducibility.utils.paper_metrics import avg_range_inv_psnr
 from microsplit_reproducibility.utils.paper_metrics import RangeInvariantPsnr
-from utils.gradient_utils import GradientUtils
+from utils.gradient_utils import GradientUtils2D as GradientUtils
 import pandas as pd
 # --------------------------
 # Gradient Histogram & KL Functions
@@ -128,6 +128,7 @@ def plot_kl_heatmaps_for_range(grad_utils_list, bin_edges, start=29, end=34, cha
     )
     fig.suptitle("KL Divergence Between Gradient Distributions", fontsize=16)
     # plt.show()
+    return fig
 
 # --------------------------
 # PSNR Functions

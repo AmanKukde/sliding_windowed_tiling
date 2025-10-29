@@ -16,19 +16,22 @@ import typer
 app = typer.Typer(help="Run batch experiment analysis locally or on HPC")
 
 # -------------------------------------------------------------------
-# 🔹 Core helpers
+# 🔹 Helpers
 # -------------------------------------------------------------------
 def find_prediction_pairs(results_base: Path, model_name: str):
-    """Find SW–OG prediction pairs given folder structure."""
+    """Find SW–OG prediction pairs for usplit or microsplit structure."""
     pairs = []
 
     if model_name == "usplit":
         for dataset_dir in results_base.iterdir():
-            if not dataset_dir.is_dir(): continue
+            if not dataset_dir.is_dir(): 
+                continue
             for modality_dir in dataset_dir.iterdir():
-                if not modality_dir.is_dir(): continue
+                if not modality_dir.is_dir():
+                    continue
                 for lc_dir in modality_dir.iterdir():
-                    if not lc_dir.is_dir(): continue
+                    if not lc_dir.is_dir():
+                        continue
                     og_files = list(lc_dir.glob("*_og.pkl*"))
                     sw_files = list(lc_dir.glob("*_stitched.pkl*"))
                     if og_files and sw_files:
@@ -41,7 +44,8 @@ def find_prediction_pairs(results_base: Path, model_name: str):
                         })
     elif model_name == "microsplit":
         for dataset_dir in results_base.iterdir():
-            if not dataset_dir.is_dir(): continue
+            if not dataset_dir.is_dir():
+                continue
             og_files = list(dataset_dir.glob("*_og.pkl*"))
             sw_files = list(dataset_dir.glob("*_stitched.pkl*"))
             if og_files and sw_files:
@@ -53,34 +57,66 @@ def find_prediction_pairs(results_base: Path, model_name: str):
 
     return pairs
 
+
+def select_pairs_interactively(pairs):
+    """Interactive CLI for selecting which SW–OG pairs to analyze."""
+    print("\nAvailable SW–OG prediction pairs:")
+    for i, p in enumerate(pairs, 1):
+        label = f"{p['dataset']}"
+        if "modality" in p:
+            label += f"/{p['modality']}"
+        if "lc" in p:
+            label += f"/{p['lc']}"
+        print(f"{i}: {label}")
+    
+    selection = input("\nEnter numbers of the pairs to run (comma-separated) or [A] for all:\n> ").strip()
+    if selection.upper() == "A":
+        return pairs
+    
+    indices = [int(s) - 1 for s in selection.split(",") if s.strip().isdigit()]
+    selected = [pairs[i] for i in indices if 0 <= i < len(pairs)]
+    if not selected:
+        print("❌ No valid selections made. Exiting.")
+        raise typer.Exit()
+    return selected
+
+
 def build_analysis_cmd(args, pair):
-    """Builds the python command list for analysis."""
-    analyze_script = Path(args["project_dir"]) / "analysis" / "analyze_experiment.py"
+    """Build the Python command list for analysis."""
+    if os.getcwd() == str(Path(args["project_dir"])):
+        analyze_script = "analysis/analyze_experiment.py"
+    else:
+        analyze_script = Path(args["project_dir"]) / "analysis" / "analyze_experiment.py"
+    save_dir = Path(args["save_base"]) / pair["dataset"]
+    if "modality" in pair: save_dir /= pair["modality"]
+    if "lc" in pair: save_dir /= pair["lc"]
+
     cmd = [
-        args["python_bin"], str(analyze_script),
+        str(args["python_bin"]), str(analyze_script),
         "--model_name", args["model_name"],
         "--dataset", pair["dataset"],
         "--pred_sw", pair["sw_path"],
         "--pred_og", pair["og_path"],
-        "--save_dir", str(Path(args["save_base"]) / pair["dataset"]),
-        "--inner_tile_size", "32",
-        "--bins", "200",
+        "--save_dir", str(save_dir),
+        "--bins", args.get("bins", "50"),
         "--channel", "all",
         "--kl_start", "29",
         "--kl_end", "33",
     ]
+    if pair["dataset"] == "HT_H24":
+        cmd.append("--inner_tile_size 9,32,32")
     if args["gradient_based_analysis"]:
-        cmd.append("--gradient_based_analysis")
+        cmd.append("--gradient_based_analysis True")
     if args["qualitative_analysis"]:
-        cmd.append("--qualitative_analysis")
-    if args["all"]:
-        cmd.append("--all")
+        cmd.append("--qualitative_analysis True")
+    # if args["all"]:
+    #     cmd.append("--all")
+
     return cmd
 
-# -------------------------------------------------------------------
-# 🔹 Execution
-# -------------------------------------------------------------------
+
 def run_local(pair, args):
+    """Run analysis locally."""
     save_dir = Path(args["save_base"]) / pair["dataset"]
     if "modality" in pair: save_dir /= pair["modality"]
     if "lc" in pair: save_dir /= pair["lc"]
@@ -94,17 +130,19 @@ def run_local(pair, args):
         print("[DRY RUN]", " ".join(cmd))
         return f"[SKIPPED] {pair}"
 
-    print(f"▶ Running local analysis for {pair}")
+    print(f"▶ Running local analysis for {pair['dataset']}")
     with open(log_file, "w") as f:
         subprocess.run(cmd, stdout=f, stderr=subprocess.STDOUT, check=True)
-    print(f"✅ Completed {pair}")
-    return f"[DONE] {pair}"
+    print(f"✅ Completed {pair['dataset']}")
+    return f"[DONE] {pair['dataset']}"
+
 
 def run_hpc(pair, args):
-    """Writes and submits SLURM job."""
+    """Submit job to HPC via SLURM."""
     save_dir = Path(args["save_base"]) / pair["dataset"]
     if "modality" in pair: save_dir /= pair["modality"]
     if "lc" in pair: save_dir /= pair["lc"]
+    
     save_dir.mkdir(parents=True, exist_ok=True)
 
     cmd_str = " ".join(build_analysis_cmd(args, pair))
@@ -120,7 +158,8 @@ def run_hpc(pair, args):
 #SBATCH --mem={args['mem']}
 #SBATCH --cpus-per-task={args['cpus']}
 #SBATCH --time={args['time']}
-
+source ~/.bashrc
+conda activate msr
 cd {args['project_dir']}
 {cmd_str}
 """
@@ -129,50 +168,70 @@ cd {args['project_dir']}
     if not args["dry_run"]:
         subprocess.run(f"ssh hpc 'bash -l -c \"sbatch {sbatch_file}\"'", shell=True, check=True)
 
-    return f"[SUBMITTED] {pair} ({sbatch_file})"
+    return f"[SUBMITTED] {pair['dataset']} ({sbatch_file})"
+
 
 # -------------------------------------------------------------------
-# 🔹 CLI entry point
+# 🔹 Main entry point
 # -------------------------------------------------------------------
 @app.command()
 def main(
-    model_name: str = typer.Option(..., help="usplit or microsplit"),
-    results_base: Path = typer.Option("/group/jug/aman/usplit_13Oct25/"),
-    project_dir: Path = typer.Option("/home/aman.kukde/sliding_windowed_tiling/"),
-    save_base: Path = typer.Option("/group/jug/aman/usplit_analysis_results_16Oct25/"),
-    python_bin: Path = typer.Option("/scratch/aman.kukde/conda/envs/msr/bin/python3.10"),
-    max_workers: int = typer.Option(4),
-    dry_run: bool = typer.Option(False),
-    gradient_based_analysis: bool = typer.Option(False),
-    qualitative_analysis: bool = typer.Option(False),
-    all: bool = typer.Option(False),
-    hpc: bool = typer.Option(False),
+    model_name: str = typer.Option("microsplit", help="Model name: 'usplit' or 'microsplit'"),
+    results_base: Path = typer.Option(..., help="Base folder with results to analyze"),
+    project_dir: Path = typer.Option('/home/aman.kukde/sliding_windowed_tiling/', help="Path to main project dir"),
+    save_base: Path = typer.Option(..., help="Where to save analysis outputs"),
+    python_bin: Path = typer.Option("python3", help="Python executable path"),
+    max_workers: int = typer.Option(4, help="Number of parallel local jobs"),
+    dry_run: bool = typer.Option(False, help="Print commands without running"),
+    gradient_based_analysis: bool = typer.Option(True),
+    qualitative_analysis: bool = typer.Option(True),
+    all: bool = typer.Option(True, help="Run all analysis steps"),
+    hpc: bool = typer.Option(True, help="Run via HPC instead of locally"),
     partition: str = typer.Option("gpuq"),
     gpus: int = typer.Option(1),
     mem: str = typer.Option("64GB"),
     cpus: int = typer.Option(4),
     time: str = typer.Option("12:00:00"),
+    interactive: bool = typer.Option(True, help="Prompt user to select which pairs to run"),
 ):
-    args = locals()  # 👈 pass around as dict
-    pairs = find_prediction_pairs(results_base, model_name)
-    print(f"Found {len(pairs)} valid pairs.")
-    if not pairs: raise typer.Exit()
+    args = locals()  # Pass around as dict
 
-    results = []
-    if hpc:
-        for p in pairs:
-            results.append(run_hpc(p, args))
+    print(f"🔍 Scanning for prediction pairs in {results_base} ...")
+    pairs = find_prediction_pairs(results_base, model_name)
+    print(f"Found {len(pairs)} valid SW–OG pairs.")
+    if not pairs:
+        typer.echo("No valid pairs found. Exiting.")
+        raise typer.Exit()
+
+    if interactive:
+        selected_pairs = select_pairs_interactively(pairs)
     else:
-        with ProcessPoolExecutor(max_workers=max_workers) as ex:
-            futures = [ex.submit(run_local, p, args) for p in pairs]
-            for f in as_completed(futures):
-                results.append(f.result())
+        selected_pairs = pairs
+
+    print(f"Selected {len(selected_pairs)} pairs for analysis.\n")
+    results = []
+
+    if hpc:
+        for p in selected_pairs:
+            results.append(run_hpc(p, args))
+    
+    else:
+        # Single-threaded version (no multiprocessing)
+        for p in selected_pairs:
+            result = run_local(p, args)
+            results.append(result)
+    # else:
+    #     with ProcessPoolExecutor(max_workers=max_workers) as ex:
+    #         futures = [ex.submit(run_local, p, args) for p in selected_pairs]
+    #         for f in as_completed(futures):
+    #             results.append(f.result())
 
     log_dir = save_base / "analysis_logs"
     log_dir.mkdir(parents=True, exist_ok=True)
     timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-    (log_dir / f"run_log_{timestamp}.log").write_text("\n".join(results))
-    print("✅ All done.")
+    log_file = log_dir / f"run_log_{timestamp}.log"
+    log_file.write_text("\n".join(results))
+    typer.echo(f"\n📝 Log saved to: {log_file}\n✅ Done.")
 
 if __name__ == "__main__":
     app()

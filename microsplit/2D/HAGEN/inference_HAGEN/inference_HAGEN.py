@@ -15,7 +15,7 @@ from careamics.lvae_training.eval_utils import (
 )
 from usplit.core.tiff_reader import save_tiff
 from careamics.lvae_training.eval_utils import (
-    stitch_predictions_windowed)
+    stitch_predictions_windowed, stitch_predictions_windowed_from_dir)
 
 # -----------------------------------------------------------------------------
 # Utility functions
@@ -193,7 +193,7 @@ def stitch_predictions_from_dir_only(
 
     print(f"📂 Reading raw predictions from: {raw_preds_dir}")
 
-    stitched_predictions, counts = stitch_and_crop_predictions_inner_tile_from_dir(
+    stitched_predictions, counts = stitch_predictions_windowed_from_dir(
         pred_dir=raw_preds_dir,
         dset=test_dset,
         num_workers=6,
@@ -202,7 +202,6 @@ def stitch_predictions_from_dir_only(
         batch_size=batch_size * 5,
         digits=digits,
         use_memmap=use_memmap,
-        num_channels = channels,
         debug=False,
     )
 
