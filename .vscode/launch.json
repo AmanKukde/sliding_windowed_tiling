@@ -108,8 +108,8 @@
         "program": "/home/aman.kukde/sliding_windowed_tiling/analysis/analysis_runner.py",
         "args": [
             "--model-name","microsplit",
-            "--results-base", "/group/jug/aman/Consolidated_Results_26Oct25/",
-            "--save-base", "/group/jug/aman/Analysis_Results_29Oct25_bin50/",
+            "--results-base", "/group/jug/aman/Processed_Results_30Oct25",
+            "--save-base", "./local_temp",
             "--python-bin", "python3.10",
         ],
         "console": "integratedTerminal"
@@ -176,14 +176,14 @@
         "name": "Run Inference Pavia",
         "type": "debugpy",
         "request": "launch",
-        "program": "${env:HOME}/sliding_windowed_tiling/microsplit/2D/PAVIA_ATN/inference_pavia/inference_pavia.py",
+        "program": "${env:HOME}/sliding_windowed_tiling/microsplit/2D/HAGEN/inference_HAGEN/inference_HAGEN.py",
         "console": "integratedTerminal",
         "python": "python3.10",
         "args": [
             "--sliding_window_flag",
             "--stitch_only",
             "--batch_size", "128",
-            "--results_root", "/group/jug/aman/microsplit_pavia_26Oct25/"
+            "--results_root", "/group/jug/aman/microsplit_Hagen_26Oct25/"
         ],
     },
 

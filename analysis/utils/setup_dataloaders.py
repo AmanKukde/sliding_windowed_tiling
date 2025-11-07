@@ -1,8 +1,6 @@
 
 from pathlib import Path
-from microsplit_reproducibility.configs.data.custom_dataset_2D import get_data_configs
-from microsplit_reproducibility.datasets.custom_dataset_2D import get_train_val_data
-from microsplit_reproducibility.configs.parameters.custom_dataset_2D import get_microsplit_parameters
+
 from microsplit_reproducibility.datasets import create_train_val_datasets
 from microsplit_reproducibility.notebook_utils.custom_dataset_2D import load_pretrained_model
 import pooch
@@ -75,13 +73,13 @@ def setup_dataset_HT_LIF24(
     # Step 2: Download data and noise models
     # -------------------------------------------------------------------------
     DATA = pooch.create(
-        path=Path(f"/group/jug/aman/Datasets/HT_LIF24/"),
+        path=Path(f"/group/jug/aman/Datasets/HT_LIF24/data"),
         base_url="https://download.fht.org/jug/msplit/ht_lif24/data/",
         registry={f"ht_lif24_{EXPOSURE_DURATION}.zip": None},
     )
 
     NOISE_MODELS = pooch.create(
-        path=Path(f"./noise_models/{EXPOSURE_DURATION}/"),
+        path=Path(f"/group/jug/aman/Datasets/HT_LIF24/noise_models/{EXPOSURE_DURATION}/"),
         base_url=f"https://download.fht.org/jug/msplit/ht_lif24/noise_models/{EXPOSURE_DURATION}/",
         registry={f"noise_model_Ch{ch}.npz": None for ch in TARGET_CHANNEL_IDX_LIST},
     )
@@ -117,9 +115,63 @@ def setup_dataset_HT_LIF24(
         test_config=test_data_config,
         load_data_func=get_train_val_data,
     )
-    model = None
-    experiment_config = None
-    selected_ckpt = None
+    if len(TARGET_CHANNEL_IDX_LIST) == 2:
+        ckpt_name = f"best_{TARGET_CHANNEL_IDX_LIST[0]}_{TARGET_CHANNEL_IDX_LIST[1]}.ckpt"
+    elif len(TARGET_CHANNEL_IDX_LIST) == 3:
+        ckpt_name = f"best_{TARGET_CHANNEL_IDX_LIST[0]}_{TARGET_CHANNEL_IDX_LIST[1]}_{TARGET_CHANNEL_IDX_LIST[2]}.ckpt"
+    elif len(TARGET_CHANNEL_IDX_LIST) == 4:
+        ckpt_name = f"best_{TARGET_CHANNEL_IDX_LIST[0]}_{TARGET_CHANNEL_IDX_LIST[1]}_{TARGET_CHANNEL_IDX_LIST[2]}_{TARGET_CHANNEL_IDX_LIST[3]}.ckpt"
+    else:
+        raise ValueError(f"Unsupported number of channels: {len(TARGET_CHANNEL_IDX_LIST)}")
+
+    MODEL_CHECKPOINTS = pooch.create(
+        path=f"/group/jug/aman/Datasets/HT_LIF24/pretrained_checkpoints/{EXPOSURE_DURATION}/",
+        base_url=f"https://download.fht.org/jug/msplit/ht_lif24/ckpts/{EXPOSURE_DURATION}",
+        registry={ckpt_name: None},
+    )
+
+    pretrained_model_available = False
+    for f in MODEL_CHECKPOINTS.registry:
+        if MODEL_CHECKPOINTS.is_available(f):
+            MODEL_CHECKPOINTS.fetch(f"{f}", progressbar=True)
+            pretrained_model_available = True
+
+    if not pretrained_model_available:
+        print("No suitable pretrained model for your data seems to be available.\n"
+            "Please train the model using the notebook '01_train.ipynb' or download \n"
+            "correct notebook. If multiple checkpoints are present in the folder, \n"
+            "remove the ones that you won't be using")
+
+    selected_ckpt = load_checkpoint_path(str('/group/jug/aman/Datasets/HT_LIF24/pretrained_checkpoints/5ms'), best=True)
+    
+    # making our data_stas known to the experiment (model) we prepare
+    experiment_params["data_stats"] = data_stats
+
+    # setting up model config (using default parameters)
+    model_config = get_model_config(**experiment_params)
+
+    # NOTE: The creation of the following configs are not strictly necessary for prediction,
+    #     but they ARE currently expected by the create_algorithm_config function below.
+    #     They act as a placeholder for now and we will work to remove them in a following release
+    loss_config = get_loss_config(**experiment_params)
+    gaussian_lik_config, noise_model_config, nm_lik_config = get_likelihood_config(
+        **experiment_params
+    )
+
+    # finally, assemble the full set of experiment configurations...
+    experiment_config = create_algorithm_config(
+        algorithm=experiment_params["algorithm"],
+        loss_config=loss_config,
+        model_config=model_config,
+        gaussian_lik_config=gaussian_lik_config,
+        nm_config=noise_model_config,
+        nm_lik_config=nm_lik_config,
+    )  
+    
+    
+    model = VAEModule(algorithm_config=experiment_config)
+    from microsplit_reproducibility.notebook_utils.HT_LIF24 import load_pretrained_model
+    load_pretrained_model(model, selected_ckpt)
     return model, experiment_config, train_dset, val_dset, test_dset
     
 def setup_dataset_HT_H24(sliding_window_flag=False):
@@ -224,16 +276,19 @@ def setup_dataset_PAVIA_ATN(
         pretrained (bool): If True, downloads and loads pretrained checkpoint
 
     Returns:
-        model, experiment_config, (train_dset, val_dset, test_dset), selected_ckpt
+        model, experiment_config, train_dset, val_dset, test_dset
+    
     """
     print(f"🔧 Setting up PAVIA_ATN environment")
-
+    from microsplit_reproducibility.configs.data.custom_dataset_2D import get_data_configs
+    from microsplit_reproducibility.datasets.custom_dataset_2D import get_train_val_data
+    from microsplit_reproducibility.configs.parameters.custom_dataset_2D import get_microsplit_parameters
     # -------------------------------------------------------------------------
     # Step 1: Define experiment configuration (channel indices and exposure)
     # -------------------------------------------------------------------------
 
-    DATA_PATH = Path("/group/jug/aman/Datasets/PAVIA_ATN/")
-    NM_PATH = Path("/group/jug/aman/Consolidated_Results_26Oct25/PAVIA_ATN/noise_models/")
+    DATA_PATH = Path("/group/jug/aman/Datasets/PAVIA_ATN/data")
+    NM_PATH = Path("/group/jug/aman/Datasets/PAVIA_ATN/noise_models/")
     
     NUM_CHANNELS = 2
     """The number of channels considered for the splitting task."""
@@ -297,7 +352,7 @@ def setup_dataset_PAVIA_ATN(
 
     model = VAEModule(algorithm_config=experiment_config)
 
-    ckpt_folder = Path("/group/jug/aman/microsplit_pavia_23Oct25/checkpoints")
+    ckpt_folder = Path("/group/jug/aman/Datasets/PAVIA_ATN/model_checkpoints")
     selected_ckpt = load_checkpoint_path(str(ckpt_folder), best=True)
    
 
@@ -330,13 +385,15 @@ def setup_dataset_HAGEN(
         model, experiment_config, (train_dset, val_dset, test_dset), selected_ckpt
     """
     print(f"🔧 Setting up HAGEN environment")
-
+    from microsplit_reproducibility.configs.data.custom_dataset_2D import get_data_configs
+    from microsplit_reproducibility.datasets.custom_dataset_2D import get_train_val_data
+    from microsplit_reproducibility.configs.parameters.custom_dataset_2D import get_microsplit_parameters
     # -------------------------------------------------------------------------
     # Step 1: Define experiment configuration (channel indices and exposure)
     # -------------------------------------------------------------------------
 
-    DATA_PATH = Path("/group/jug/aman/Datasets/Hagen/")
-    NM_PATH = Path("/group/jug/aman/Consolidated_Results_26Oct25/HAGEN/noise_models/")
+    DATA_PATH = Path("/group/jug/aman/Datasets/HAGEN/data")
+    NM_PATH = Path("/group/jug/aman/Datasets/HAGEN/noise_models/")
     
     NUM_CHANNELS = 2
     """The number of channels considered for the splitting task."""
@@ -400,7 +457,7 @@ def setup_dataset_HAGEN(
 
     model = VAEModule(algorithm_config=experiment_config)
 
-    ckpt_folder = Path("/group/jug/aman/microsplit_Hagen_26Oct25/checkpoints")
+    ckpt_folder = Path("/group/jug/aman/Datasets/HAGEN/model_checkpoints")
     selected_ckpt = load_checkpoint_path(str(ckpt_folder), best=True)
 
     if selected_ckpt is not None:
@@ -415,3 +472,118 @@ def setup_dataset_HAGEN(
     print("✅ Environment setup complete.")
     return model, experiment_config, train_dset, val_dset, test_dset
 
+# main_inference.py
+from pathlib import Path
+import argparse
+from inference_utils import (
+    run_inference_original,
+    run_inference_sliding_and_stitch,
+)
+from dataset_registry import DATASET_SETUP_FUNCS
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Run MicroSplit LVAE inference")
+
+    # -------------------------------------------------------------------------
+    # Dataset and model setup
+    # -------------------------------------------------------------------------
+    parser.add_argument(
+        "--dataset",
+        type=str,
+        required=True,
+        choices=["PAVIA_ATN", "HAGEN", "HT_LIF24"],
+        help="Dataset to run inference on"
+    )
+    parser.add_argument("--num_channels", type=int, default=2, help="Number of channels (2, 3, or 4)")
+    parser.add_argument("--exposure_duration", type=str, default="5ms", help="Exposure duration for HT_LIF24 dataset")
+
+    # -------------------------------------------------------------------------
+    # Inference behavior
+    # -------------------------------------------------------------------------
+    parser.add_argument("--reduce_dataset_size", action="store_true",
+                        help="Reduce dataset size for quick testing (val/test only)")
+    parser.add_argument("--sliding_window_flag", action="store_true",
+                        help="Enable sliding-window inference")
+    parser.add_argument("--stitch_only", action="store_true",
+                        help="Stitch previously saved tiles only")
+    parser.add_argument("--results_root", type=str, default="./Microsplit_predictions",
+                        help="Where to save results")
+    parser.add_argument("--raw_preds_dir", type=str, default=None,
+                        help="Directory with raw .npy tiles (for stitch_only mode)")
+
+    # -------------------------------------------------------------------------
+    # Performance and configuration parameters
+    # -------------------------------------------------------------------------
+    parser.add_argument("--batch_size", type=int, default=128)
+    parser.add_argument("--num_workers", type=int, default=8)
+    parser.add_argument("--mmse_count", type=int, default=64)
+    parser.add_argument("--grid_size", type=int, default=32)
+    parser.add_argument("--load_pretrained_ckpt", action="store_false",
+                        help="Skip pretrained model loading")
+
+    args = parser.parse_args()
+
+    # -------------------------------------------------------------------------
+    # Dataset setup
+    # -------------------------------------------------------------------------
+    setup_fn = DATASET_SETUP_FUNCS.get(args.dataset.upper())
+    if setup_fn is None:
+        raise ValueError(f"❌ Unknown dataset: {args.dataset}")
+
+    setup_kwargs = {
+        "sliding_window_flag": args.sliding_window_flag
+    }
+
+    # Add dataset-specific extras
+    if args.dataset.upper() == "HT_LIF24":
+        setup_kwargs["num_channels"] = args.num_channels
+        setup_kwargs["exposure_duration"] = args.exposure_duration
+
+    model, experiment_config, train_dset, val_dset, test_dset = setup_fn(**setup_kwargs)
+
+    # -------------------------------------------------------------------------
+    # Optional: Reduce dataset for quick testing
+    # -------------------------------------------------------------------------
+    if args.reduce_dataset_size and hasattr(test_dset, "reduce_data"):
+        print("⚙️ Reducing test dataset size for quick testing...")
+        test_dset.reduce_data([0])
+
+    # -------------------------------------------------------------------------
+    # Run inference
+    # -------------------------------------------------------------------------
+    if args.stitch_only:
+        print("🧵 Stitching previously saved tiles only...")
+        # You’ll implement this
+        stitch_predictions_from_dir_only(
+            train_dset,
+            test_dset,
+            results_root=args.results_root,
+            batch_size=args.batch_size,
+            channels=args.num_channels,
+        )
+
+    elif args.sliding_window_flag:
+        print("🪟 Running sliding-window inference + stitching...")
+        run_inference_sliding_and_stitch(
+            model=model,
+            train_dset=train_dset,
+            test_dset=test_dset,
+            batch_size=args.batch_size,
+            num_workers=args.num_workers,
+            results_root=args.results_root,
+            dataset=args.dataset,
+        )
+
+    else:
+        print("🎯 Running standard inference...")
+        run_inference_original(
+            model=model,
+            experiment_params=experiment_config,
+            test_dset=test_dset,
+            batch_size=args.batch_size,
+            num_workers=args.num_workers,
+            mmse_count=args.mmse_count,
+            grid_size=args.grid_size,
+            dataset=args.dataset,
+            results_root=Path(args.results_root),
+        )

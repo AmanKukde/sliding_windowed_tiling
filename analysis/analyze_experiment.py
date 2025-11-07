@@ -74,19 +74,30 @@ def compute_and_save_stats(tar, img_og, img_sw, save_dir, dataset_name):
 # ------------------------------
 # Analyses
 # ------------------------------
-def run_gradient_based_analysis(img_sw, img_og, save_dir, inner_tile_size=32, bins=200, channel=1, kl_start=29, kl_end=33):
+def run_gradient_based_analysis(img_sw, img_og, save_dir, inner_tile_size=32, bins=200, channel=None, kl_start=29, kl_end=33):
+    """
+    Run gradient-based analysis comparing sliding window vs original predictions.
+    Args:
+        img_sw: Sliding window predictions (numpy array)
+        img_og: Original predictions (numpy array)
+        save_dir: Directory to save plots and stats
+        inner_tile_size: Tile size used during prediction
+        bins: Number of bins for histograms
+        channel: Channel index to analyze (None for all channels)
+        kl_start: Start index for KL divergence heatmaps
+        kl_end: End index for KL divergence heatmaps
+    """
     if len(img_sw.shape) == 4:
         from utils.gradient_utils import GradientUtils2D as GradientUtils
     else:
         from utils.gradient_utils import GradientUtils3D as GradientUtils
-    grad_sw = GradientUtils(img_sw, tile_size=inner_tile_size)
-    grad_og = GradientUtils(img_og, tile_size=inner_tile_size)
-    bin_edges = grad_sw.make_bin_edges(n_bins=bins)
+    grad_sw = GradientUtils(img_sw, tile_size=inner_tile_size, border_size=16, channel = channel)
+    grad_og = GradientUtils(img_og, tile_size=inner_tile_size, border_size=16, channel = channel)
 
     summarize_gradients(
         grad_utils_og=grad_og,
         grad_utils_sw=grad_sw,
-        bin_edges=bin_edges,
+        num_bins=bins,
         channel=channel,
         save_dir= save_dir / f"Gradient_Analysis_Channel_{channel}")
 

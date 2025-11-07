@@ -33,7 +33,7 @@ def find_prediction_pairs(results_base: Path, model_name: str):
                     if not lc_dir.is_dir():
                         continue
                     og_files = list(lc_dir.glob("*_og.pkl*"))
-                    sw_files = list(lc_dir.glob("*_stitched.pkl*"))
+                    sw_files = list(lc_dir.glob("*_swt.pkl*"))
                     if og_files and sw_files:
                         pairs.append({
                             "dataset": dataset_dir.name,
@@ -47,7 +47,7 @@ def find_prediction_pairs(results_base: Path, model_name: str):
             if not dataset_dir.is_dir():
                 continue
             og_files = list(dataset_dir.glob("*_og.pkl*"))
-            sw_files = list(dataset_dir.glob("*_stitched.pkl*"))
+            sw_files = list(dataset_dir.glob("*_swt.pkl*"))
             if og_files and sw_files:
                 pairs.append({
                     "dataset": dataset_dir.name,
@@ -105,10 +105,15 @@ def build_analysis_cmd(args, pair):
     ]
     if pair["dataset"] == "HT_H24":
         cmd.append("--inner_tile_size 9,32,32")
+    else :
+        cmd.append(f"--inner_tile_size")
+        cmd.append(args.get('inner_tile_size', "32,32"))
     if args["gradient_based_analysis"]:
-        cmd.append("--gradient_based_analysis True")
+        cmd.append("--gradient_based_analysis")
+        cmd.append("True")
     if args["qualitative_analysis"]:
-        cmd.append("--qualitative_analysis True")
+        cmd.append("--qualitative_analysis")
+        cmd.append("True")
     # if args["all"]:
     #     cmd.append("--all")
 
@@ -186,7 +191,7 @@ def main(
     gradient_based_analysis: bool = typer.Option(True),
     qualitative_analysis: bool = typer.Option(True),
     all: bool = typer.Option(True, help="Run all analysis steps"),
-    hpc: bool = typer.Option(True, help="Run via HPC instead of locally"),
+    hpc: bool = typer.Option(False, help="Run via HPC instead of locally"),
     partition: str = typer.Option("gpuq"),
     gpus: int = typer.Option(1),
     mem: str = typer.Option("64GB"),

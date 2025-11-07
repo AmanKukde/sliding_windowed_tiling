@@ -29,38 +29,117 @@ def compute_kl_matrix(histograms):
                 kl_mat[i, j] = kl_divergence(histograms[i], histograms[j])
     return kl_mat
 
-def plot_multiple_hist(ax, arrays, labels, colors, title, legend=False):
-    if not (len(arrays) == len(labels) == len(colors)):
-        raise ValueError("arrays, labels, and colors must have the same length")
+def plot_multiple_boxplots(
+    axs, arrays_list, labels_list, colors_list, titles_list, legend=False
+):
+    """
+    Plot multiple boxplots dynamically on given axes.
 
-    non_empty_arrays = [a for a in arrays if a.size > 0]
-    if not non_empty_arrays:
-        raise ValueError("All input arrays are empty, cannot plot histogram")
+    Parameters
+    ----------
+    axs : list or array of matplotlib axes
+        Axes to plot on.
+    arrays_list : list of list of arrays
+        Each sublist contains arrays to plot on corresponding axis.
+    labels_list : list of list of str
+        Labels for each array in each subplot.
+    colors_list : list of list of str
+        Colors for each box in each subplot.
+    titles_list : list of str
+        Titles for each subplot.
+    legend : bool, optional
+        If True, add legend to each subplot.
+    """
+    if not (len(axs) == len(arrays_list) == len(labels_list) == len(colors_list) == len(titles_list)):
+        raise ValueError("Length of axs, arrays_list, labels_list, colors_list, titles_list must match")
 
-    all_min = min(np.min(a) for a in non_empty_arrays)
-    all_max = max(np.max(a) for a in non_empty_arrays)
-    if all_min == all_max:
-        all_min -= 1e-3
-        all_max += 1e-3
+    for ax, arrays, labels, colors, title in zip(axs, arrays_list, labels_list, colors_list, titles_list):
+        bp = ax.boxplot(arrays, patch_artist=True, labels=labels)
+        for patch, color in zip(bp['boxes'], colors):
+            patch.set_facecolor(color)
+        ax.set_title(title)
+        ax.grid(True)
+        if legend:
+            ax.legend(labels)
 
-    x = np.linspace(all_min, all_max, 1000)
 
-    for a, label, color in zip(arrays, labels, colors):
-        mu, std = norm.fit(a)
-        ax.hist(a, bins=100, density=True, alpha=0.5, label=label, color=color)
-        ax.plot(x, norm.pdf(x, mu, std), linestyle='-', color=color,
-                label=f'{label}\nFit μ={mu:.2f}, σ={std:.2f}')
+def plot_multiple_hist(ax, histograms, bin_edges, labels, colors, title, legend=False):
+    """
+    Plot multiple precomputed histograms with fitted normal distributions on a single axis.
+    Shows two legend boxes: left = fit info, right = histogram labels.
+    Keeps y-axis labels visible on all subplots (even if sharey=True).
+    """
+    if not (len(histograms) == len(labels) == len(colors)):
+        raise ValueError("histograms, labels, and colors must have the same length")
+
+    # Ensure numpy array
+    bin_edges = np.asarray(bin_edges)
+    bin_centers = 0.5 * (bin_edges[:-1] + bin_edges[1:])
+    x = np.linspace(bin_edges[0], bin_edges[-1], 1000)
+
+    data_handles = []
+    fit_handles = []
+
+    for counts, label, color in zip(histograms, labels, colors):
+        if np.sum(counts) == 0:
+            continue
+
+        # Normalize histogram to density
+        area = np.trapz(counts, bin_centers)
+        density = counts / area if area > 0 else counts
+
+        # Weighted mean & std
+        mu = np.average(bin_centers, weights=density)
+        var = np.average((bin_centers - mu) ** 2, weights=density)
+        std = np.sqrt(var)
+
+        # Plot histogram bars
+        bars = ax.bar(
+            bin_centers, density, width=np.diff(bin_edges),
+            alpha=0.5, color=color, label=label, edgecolor='none'
+        )
+        data_handles.append(bars[0])
+
+        # Plot normal fit line
+        line, = ax.plot(
+            x, norm.pdf(x, mu, std),
+            color=color, lw=1.8, label=f"{label} fit: μ={mu:.2f}, σ={std:.2f}"
+        )
+        fit_handles.append(line)
 
     ax.set_title(title)
-    ax.set_xlabel("Gradient Value")
+    ax.set_xlabel("Value")
     ax.set_ylabel("Density")
-    ax.grid(True)
+    ax.grid(True, linestyle="--", alpha=0.5)
+
+    # Make sure y-axis labels show even when sharey=True
+    ax.yaxis.set_tick_params(labelleft=True)
+
     if legend:
-        ax.legend()
+        # Left legend: fit info
+        leg_fit = ax.legend(
+            handles=fit_handles,
+            loc="upper left",
+            fontsize=8,
+            frameon=True,
+            title="Normal Fit"
+        )
+        ax.add_artist(leg_fit)  # Add first legend manually
+
+        # Right legend: histogram names
+        ax.legend(
+            handles=data_handles,
+            labels=labels,
+            loc="upper right",
+            fontsize=8,
+            frameon=True,
+            title="Histograms"
+        )
 
 def plot_multiple_bar(ax, arrays, bin_edges, labels, colors, title, smooth_window=3, legend=True):
     n_bins = len(arrays[0])
     if len(bin_edges) != n_bins:
+        bin_edges = np.broadcast_arrays(bin_edges, np.zeros(n_bins))
         raise ValueError("Length of bin_edges must match length of arrays")
 
     bar_width = np.min(np.diff(bin_edges)) * 0.4
@@ -129,6 +208,72 @@ def plot_kl_heatmaps_for_range(grad_utils_list, bin_edges, start=29, end=34, cha
     fig.suptitle("KL Divergence Between Gradient Distributions", fontsize=16)
     # plt.show()
     return fig
+
+def plot_multiple_hist(ax, histograms, bin_edges, labels, colors, title, legend=False):
+    """
+    Plot multiple precomputed histograms with fitted normal distributions on a single axis.
+
+    Parameters
+    ----------
+    ax : matplotlib.axes.Axes
+        Axis to plot on.
+    histograms : list of array_like
+        Each element is a 1D array of counts (same bins for all histograms).
+    bin_edges : array_like
+        Shared bin edges used for all histograms.
+    labels : list of str
+        Labels for each histogram.
+    colors : list of str
+        Colors for each histogram.
+    title : str
+        Title for the plot.
+    legend : bool, optional
+        If True, display a legend (default: False).
+    """
+    if not (len(histograms) == len(labels) == len(colors)):
+        raise ValueError("histograms, labels, and colors must have the same length")
+
+    # Convert bin_edges to array (in case it's a list)
+    bin_edges = np.asarray(bin_edges)
+    bin_centers = 0.5 * (bin_edges[:-1] + bin_edges[1:])
+
+    # Filter out empty histograms
+    non_empty_histograms = [h for h in histograms if np.sum(h) > 0]
+    if not non_empty_histograms:
+        raise ValueError("All input histograms are empty, cannot plot")
+
+    all_min, all_max = bin_edges[0], bin_edges[-1]
+    if all_min == all_max:
+        all_min -= 1e-3
+        all_max += 1e-3
+
+    x = np.linspace(all_min, all_max, 1000)
+
+    # Plot each histogram and its fitted normal curve
+    for counts, label, color in zip(histograms, labels, colors):
+        if np.sum(counts) == 0:
+            continue
+
+        # Normalize to density
+        area = np.trapz(counts, bin_centers)
+        density = counts / area if area > 0 else counts
+
+        # Fit normal distribution (weighted mean/std)
+        mu = np.average(bin_centers, weights=density)
+        variance = np.average((bin_centers - mu)**2, weights=density)
+        std = np.sqrt(variance)
+
+        # Plot histogram and fit
+        ax.bar(bin_centers, density, width=np.diff(bin_edges), alpha=0.5, color=color, label=label)
+        ax.plot(x, norm.pdf(x, mu, std), linestyle='-', color=color,
+                label=f'{label}\nFit μ={mu:.2f}, σ={std:.2f}')
+
+    ax.set_title(title)
+    ax.set_xlabel("Value")
+    ax.set_ylabel("Density")
+    ax.grid(True)
+    if legend:
+        ax.legend()
 
 # --------------------------
 # PSNR Functions
@@ -315,7 +460,7 @@ def compute_psnr_and_plot(test_data, img_og, img_win, save_dir):
     return psnr_df, avg_df
 
 
-# --- full_frame_evaluation function (provided in your initial prompt) ---
+
 def full_frame_evaluation(
     predictions_list,
     tar_list,
@@ -486,3 +631,287 @@ def full_frame_evaluation(
     if save_path:
         plt.savefig(save_path, bbox_inches='tight')
         plt.close(fig)
+    else:
+        plt.show()
+
+def full_frame_evaluation_zoomed(
+    predictions_list,
+    tar_list,
+    inp_list,
+    frame_idx,
+    titles,
+    save_path=None
+):
+    import matplotlib.pyplot as plt
+    from matplotlib.gridspec import GridSpec
+    import matplotlib.patches as patches
+    import numpy as np
+
+    # Validate input lengths
+    n_methods = len(predictions_list)
+    assert len(tar_list) == n_methods and len(inp_list) == n_methods, \
+        "predictions_list, tar_list, and inp_list must have the same length"
+    assert len(titles) >= n_methods, \
+        "titles must have at least as many entries as there are methods"
+
+    # === Normalization range based on GT ===
+    all_targets = np.concatenate([t for t in tar_list], axis=-1)
+    vmin = np.nanpercentile(all_targets, 1)
+    vmax = np.nanpercentile(all_targets, 99)
+    if vmin == vmax:
+        vmin, vmax = 0, 1
+
+    # === Figure setup ===
+    fig = plt.figure(figsize=(22, 16), constrained_layout=True)
+    gs = GridSpec(3, 4, figure=fig)
+    plt.rcParams.update({'font.size': 12})
+
+    # === Compute full input and crop region ===
+    full_input_img = np.mean(inp_list[0][..., :2], axis=-1)
+    H, W = full_input_img.shape
+    crop_h = H // 4
+    crop_w = W // 4
+    crop_y = (H - crop_h) // 2
+    crop_x = (W - crop_w) // 2
+    crop_slice_y = slice(crop_y, crop_y + crop_h)
+    crop_slice_x = slice(crop_x, crop_x + crop_w)
+    rect_kwargs = dict(linewidth=2, edgecolor='yellow', facecolor='none')
+
+    # === Prepare crops ===
+    preds_crops = []
+    targets_crops = []
+    for i in range(n_methods):
+        targets_crops.append(tar_list[i][crop_slice_y, crop_slice_x, :])
+        preds_crops.append(predictions_list[i][crop_slice_y, crop_slice_x, :])
+
+    # === Row 1: GTs, full input, zoomed input ===
+    full_target = tar_list[0]
+
+    # GT channel 0
+    ax_gt0 = fig.add_subplot(gs[0, 0])
+    ax_gt0.imshow(full_target[..., 0], cmap='gray', vmin=vmin, vmax=vmax)
+    ax_gt0.set_title("GT Channel 0 (Full)")
+    ax_gt0.add_patch(patches.Rectangle((crop_x, crop_y), crop_w, crop_h, **rect_kwargs))
+    ax_gt0.axis('off')
+
+    # GT channel 1
+    ax_gt1 = fig.add_subplot(gs[0, 1])
+    ax_gt1.imshow(full_target[..., 1], cmap='gray', vmin=vmin, vmax=vmax)
+    ax_gt1.set_title("GT Channel 1 (Full)")
+    ax_gt1.add_patch(patches.Rectangle((crop_x, crop_y), crop_w, crop_h, **rect_kwargs))
+    ax_gt1.axis('off')
+
+    # Full input
+    ax_inp_full = fig.add_subplot(gs[0, 2])
+    ax_inp_full.imshow(full_input_img, cmap='gray', vmin=vmin, vmax=vmax)
+    ax_inp_full.set_title(f"{titles[0]} Input (Frame {frame_idx})")
+    ax_inp_full.add_patch(patches.Rectangle((crop_x, crop_y), crop_w, crop_h, **rect_kwargs))
+    ax_inp_full.axis('off')
+
+    # Zoomed input
+    ax_inp_zoom = fig.add_subplot(gs[0, 3])
+    ax_inp_zoom.imshow(full_input_img[crop_slice_y, crop_slice_x], cmap='gray', vmin=vmin, vmax=vmax)
+    ax_inp_zoom.set_title("Zoomed Input")
+    ax_inp_zoom.axis('off')
+
+    # === Row 2: Predictions (Channel 0) ===
+    ax_pred_orig_ch0 = fig.add_subplot(gs[1, 0])
+    ax_pred_orig_ch0.imshow(preds_crops[0][..., 0], cmap='gray', vmin=vmin, vmax=vmax)
+    ax_pred_orig_ch0.set_title(f"{titles[0]} Prediction Ch0")
+    ax_pred_orig_ch0.axis('off')
+
+    ax_pred_slide_ch0 = fig.add_subplot(gs[1, 1])
+    ax_pred_slide_ch0.imshow(preds_crops[1][..., 0], cmap='gray', vmin=vmin, vmax=vmax)
+    ax_pred_slide_ch0.set_title(f"{titles[1]} Prediction Ch0")
+    ax_pred_slide_ch0.axis('off')
+
+    # Add GT ch0 again for visual alignment reference
+    ax_gt_crop_ch0 = fig.add_subplot(gs[1, 2])
+    ax_gt_crop_ch0.imshow(targets_crops[0][..., 0], cmap='gray', vmin=vmin, vmax=vmax)
+    ax_gt_crop_ch0.set_title("GT Ch0 (Crop)")
+    ax_gt_crop_ch0.axis('off')
+
+    # Optional: difference map between two methods (abs diff)
+    diff_ch0 = np.abs(preds_crops[0][..., 0] - preds_crops[1][..., 0])
+    ax_diff_ch0 = fig.add_subplot(gs[1, 3])
+    ax_diff_ch0.imshow(diff_ch0, cmap='magma')
+    ax_diff_ch0.set_title("|Diff| Ch0")
+    ax_diff_ch0.axis('off')
+
+    # === Row 3: Predictions (Channel 1) ===
+    ax_pred_orig_ch1 = fig.add_subplot(gs[2, 0])
+    ax_pred_orig_ch1.imshow(preds_crops[0][..., 1], cmap='gray', vmin=vmin, vmax=vmax)
+    ax_pred_orig_ch1.set_title(f"{titles[0]} Prediction Ch1")
+    ax_pred_orig_ch1.axis('off')
+
+    ax_pred_slide_ch1 = fig.add_subplot(gs[2, 1])
+    ax_pred_slide_ch1.imshow(preds_crops[1][..., 1], cmap='gray', vmin=vmin, vmax=vmax)
+    ax_pred_slide_ch1.set_title(f"{titles[1]} Prediction Ch1")
+    ax_pred_slide_ch1.axis('off')
+
+    # Add GT ch1 again for comparison
+    ax_gt_crop_ch1 = fig.add_subplot(gs[2, 2])
+    ax_gt_crop_ch1.imshow(targets_crops[0][..., 1], cmap='gray', vmin=vmin, vmax=vmax)
+    ax_gt_crop_ch1.set_title("GT Ch1 (Crop)")
+    ax_gt_crop_ch1.axis('off')
+
+    # Optional: difference map for ch1
+    diff_ch1 = np.abs(preds_crops[0][..., 1] - preds_crops[1][..., 1])
+    ax_diff_ch1 = fig.add_subplot(gs[2, 3])
+    ax_diff_ch1.imshow(diff_ch1, cmap='magma')
+    ax_diff_ch1.set_title("|Diff| Ch1")
+    ax_diff_ch1.axis('off')
+
+    # === Margins and spacing ===
+    fig.subplots_adjust(
+        left=0.10,
+        right=0.90,
+        top=0.90,
+        bottom=0.10,
+        wspace=0.10,
+        hspace=0.50
+    )
+
+    # === Save or show ===
+    if save_path:
+        plt.savefig(save_path, bbox_inches='tight', dpi=150)
+        plt.close(fig)
+    else:
+        plt.show()
+def full_frame_evaluation_zoomed(
+    predictions_list,
+    tar_list,
+    inp_list,
+    frame_idx,
+    titles,          # e.g. ["Original", "Sliding Window"]
+    save_path=None
+):
+    import matplotlib.pyplot as plt
+    from matplotlib.gridspec import GridSpec
+    import matplotlib.patches as patches
+    import numpy as np
+
+    # Validate input lengths
+    n_methods = len(predictions_list)
+    assert n_methods == 2, "This layout assumes exactly two methods (Original + Sliding Window)"
+    assert len(tar_list) == n_methods and len(inp_list) == n_methods, \
+        "predictions_list, tar_list, and inp_list must have the same length"
+    assert len(titles) >= n_methods, "titles must have at least as many entries as methods"
+
+    # === Normalization range based on GT (per channel) ===
+    all_targets = np.concatenate([t for t in tar_list], axis=0)  # stack along batch dimension
+    num_channels = all_targets.shape[-1]
+    vmins, vmaxs = [], []
+    for ch in range(num_channels):
+        vmin = np.nanpercentile(all_targets[..., ch], 1)
+        vmax = np.nanpercentile(all_targets[..., ch], 99)
+        if vmin == vmax:  # fallback
+            vmin, vmax = 0, 1
+        vmins.append(vmin)
+        vmaxs.append(vmax)
+
+    # === Figure setup ===
+    fig = plt.figure(figsize=(22, 18), constrained_layout=True)
+    gs = GridSpec(4, 4, figure=fig)
+    plt.rcParams.update({'font.size': 12})
+
+    # === Compute crop region ===
+    full_input_img = np.mean(inp_list[0][..., :2], axis=-1)
+    H, W = full_input_img.shape
+    crop_h = H // 4
+    crop_w = W // 4
+    crop_y = (H - crop_h) // 2
+    crop_x = (W - crop_w) // 2
+    crop_slice_y = slice(crop_y, crop_y + crop_h)
+    crop_slice_x = slice(crop_x, crop_x + crop_w)
+
+    rect_kwargs = dict(linewidth=2, edgecolor='yellow', facecolor='none')
+
+    # === Row 1: Full GTs, Input, Zoomed Input ===
+    # GT Ch0
+    ax_gt0 = fig.add_subplot(gs[0, 0])
+    ax_gt0.imshow(tar_list[0][..., 0], cmap='gray', vmin=vmins[0], vmax=vmaxs[0])
+    ax_gt0.add_patch(patches.Rectangle((crop_x, crop_y), crop_w, crop_h, **rect_kwargs))
+    ax_gt0.set_title("GT Channel 0 (Full)")
+    ax_gt0.axis('off')
+
+    # GT Ch1
+    ax_gt1 = fig.add_subplot(gs[0, 1])
+    ax_gt1.imshow(tar_list[0][..., 1], cmap='gray', vmin=vmins[1], vmax=vmaxs[1])
+    ax_gt1.add_patch(patches.Rectangle((crop_x, crop_y), crop_w, crop_h, **rect_kwargs))
+    ax_gt1.set_title("GT Channel 1 (Full)")
+    ax_gt1.axis('off')
+
+    # Full Input
+    ax_input = fig.add_subplot(gs[0, 2])
+    ax_input.imshow(full_input_img, cmap='gray')
+    ax_input.add_patch(patches.Rectangle((crop_x, crop_y), crop_w, crop_h, **rect_kwargs))
+    ax_input.set_title(f"Input (Frame {frame_idx})")
+    ax_input.axis('off')
+
+    # Zoomed Input
+    ax_input_zoom = fig.add_subplot(gs[0, 3])
+    ax_input_zoom.imshow(full_input_img[crop_slice_y, crop_slice_x], cmap='gray')
+    ax_input_zoom.set_title("Input Zoomed")
+    ax_input_zoom.axis('off')
+
+    # === Row 2: Zoomed GT Channels (ch0, ch1) + 2 blanks ===
+    ax_gtz0 = fig.add_subplot(gs[1, 0])
+    ax_gtz0.imshow(tar_list[0][crop_slice_y, crop_slice_x, 0], cmap='gray',
+                   vmin=vmins[0], vmax=vmaxs[0])
+    ax_gtz0.set_title("GT Channel 0 (Zoomed)")
+    ax_gtz0.axis('off')
+
+    ax_gtz1 = fig.add_subplot(gs[1, 1])
+    ax_gtz1.imshow(tar_list[0][crop_slice_y, crop_slice_x, 1], cmap='gray',
+                   vmin=vmins[1], vmax=vmaxs[1])
+    ax_gtz1.set_title("GT Channel 1 (Zoomed)")
+    ax_gtz1.axis('off')
+
+    for col in [2, 3]:
+        fig.add_subplot(gs[1, col]).axis('off')
+
+    # === Row 3: Predictions Ch0 (Full) ===
+    ax_pred0_orig = fig.add_subplot(gs[2, 0])
+    ax_pred0_orig.imshow(predictions_list[0][..., 0], cmap='gray',
+                         vmin=vmins[0], vmax=vmaxs[0])
+    ax_pred0_orig.set_title(f"{titles[0]} Prediction Ch0 (Full)")
+    ax_pred0_orig.axis('off')
+
+    ax_pred0_slide = fig.add_subplot(gs[2, 1])
+    ax_pred0_slide.imshow(predictions_list[1][..., 0], cmap='gray',
+                          vmin=vmins[0], vmax=vmaxs[0])
+    ax_pred0_slide.set_title(f"{titles[1]} Prediction Ch0 (Full)")
+    ax_pred0_slide.axis('off')
+
+    for col in [2, 3]:
+        fig.add_subplot(gs[2, col]).axis('off')
+
+    # === Row 4: Predictions Ch1 (Full) ===
+    ax_pred1_orig = fig.add_subplot(gs[3, 0])
+    ax_pred1_orig.imshow(predictions_list[0][..., 1], cmap='gray',
+                         vmin=vmins[1], vmax=vmaxs[1])
+    ax_pred1_orig.set_title(f"{titles[0]} Prediction Ch1 (Full)")
+    ax_pred1_orig.axis('off')
+
+    ax_pred1_slide = fig.add_subplot(gs[3, 1])
+    ax_pred1_slide.imshow(predictions_list[1][..., 1], cmap='gray',
+                          vmin=vmins[1], vmax=vmaxs[1])
+    ax_pred1_slide.set_title(f"{titles[1]} Prediction Ch1 (Full)")
+    ax_pred1_slide.axis('off')
+
+    for col in [2, 3]:
+        fig.add_subplot(gs[3, col]).axis('off')
+
+    # === Margins ===
+    fig.subplots_adjust(
+        left=0.03, right=0.97, top=0.93, bottom=0.05,
+        wspace=0.12, hspace=0.25
+    )
+
+    # === Save or show ===
+    if save_path:
+        plt.savefig(save_path, bbox_inches='tight', dpi=150)
+        plt.close(fig)
+    else:
+        plt.show()

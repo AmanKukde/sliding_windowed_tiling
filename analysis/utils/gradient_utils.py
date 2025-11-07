@@ -1,89 +1,53 @@
 import numpy as np
-
-class GradientUtils2D:
+from sklearn.preprocessing import MinMaxScaler
+class GradientUtils:
     """
-    Class to compute tiling statistics such as gradient histograms and peakiness scores.
+    Base class for computing gradient-based tiling statistics, histograms,
+    and peakiness scores.
     """
 
-    def __init__(self, imgs: np.ndarray, tile_size: int = 32, border_size: int = None, bin_edges: np.ndarray = None):
-        """
-        Initialize the GradientUtils class.
-
-        Args:
-            imgs (numpy array with dims BYXC): a batch of images.
-            tile_size (int, optional): size of tiles in X and Y direction. Defaults to 32.
-            border_size (int, optional): border width to ignore. Defaults to tile_size // 2.
-            bin_edges (numpy array, optional): bin edges for histograms. If None, computed from gradients.
-        """
+    def __init__(self, imgs: np.ndarray, tile_size, border_size=None, bin_edges=None, channel=None):
         self.imgs = imgs
-        self.tile_size = tile_size[0] if isinstance(tile_size, (list, tuple, np.ndarray)) else tile_size
-        self.border_size = border_size if border_size is not None else tile_size[0] // 2
-
-        # remove border artefacts
-        self.imgs_without_borders = GradientUtils2D.border_free(self.imgs, self.border_size)
-
-        # gradients
-        self.gradients_x, self.gradients_y = GradientUtils2D.compute_gradients(self.imgs, self.border_size)
-
-        # gradients along tile grid
-        self.gradients_edges = self._gradients_along_tile_grid(offset=self.tile_size - 1)
-        self.gradients_middle = self._gradients_along_tile_grid(offset=self.tile_size // 2 - 1)
-
-        # compute bin edges (if not given)
+        self.tile_size = np.array(tile_size) if isinstance(tile_size, (tuple, list, np.ndarray)) else tile_size
+        self.border_size = border_size
         self._bin_edges = bin_edges
+
+        # Remove borders
+        self.imgs_wo_borders = self.border_free(self.imgs, self.border_size)
+
+        # Compute gradients along each axis
+        self.gradients = self.compute_gradients(self.imgs_wo_borders, self.border_size)
+
+        # Gradients along tile grid
+        self.grad_edges = self.get_gradients_at(position="edge", channels=channel)
+        self.grad_middle = self.get_gradients_at(position="middle", channels=channel)
+
+        # Normalize gradients
+        scaler = MinMaxScaler(feature_range=(-1, 1))
+        self.grad_edges = scaler.fit_transform(self.grad_edges.reshape(-1, 1)).flatten()
+        self.grad_middle = scaler.fit_transform(self.grad_middle.reshape(-1, 1)).flatten()
+
+        # Bin edges
         if self._bin_edges is None:
-            self._bin_edges = GradientUtils2D.get_bin_edges(
-                [self.gradients_x, self.gradients_y, self.gradients_edges, self.gradients_middle],
-                num_bins=200
-            )
-        
-        # histograms
-        self.histogram_edges = GradientUtils2D.compute_histograms(self.gradients_edges, self._bin_edges)
-        self.histogram_middle = GradientUtils2D.compute_histograms(self.gradients_middle, self._bin_edges)
-    
-    # FIXED: Added method to create bin edges (was missing!)
-    def make_bin_edges(self, n_bins=2000):
-        """Create bin edges from the gradient data."""
-        return GradientUtils2D.get_bin_edges(
-            [self.gradients_x, self.gradients_y, self.gradients_edges, self.gradients_middle],
-            num_bins=n_bins
-        )
-        
-    @staticmethod
-    def compute_histograms(gradients: np.ndarray, bin_edges: np.ndarray):
-        """
-        Compute histograms for gradients.
-        Args:
-            gradients (numpy array): gradients
-            bin_edges (numpy array): edges of the histogram bins.
-        Returns:
-            histograms (tuple): histograms for edges and middle gradients.
-        """
-        return np.histogram(gradients, bins=bin_edges)[0]
+            self._bin_edges = self.get_bin_edges(list(self.gradients) + [self.grad_edges, self.grad_middle])
 
-    @staticmethod
-    def compute_gradients(imgs: np.ndarray, border_size: int = 0):
-        """Compute horizontal and vertical gradients for an image batch."""
-        wb = GradientUtils2D.border_free(imgs, border_size)
-        grad_x = wb[:, :, 1:, :] - wb[:, :, :-1, :]  # horizontal
-        grad_y = wb[:, 1:, :, :] - wb[:, :-1, :, :]  # vertical
-        return grad_x, grad_y
+        # Histograms
+        # self.histogram_edges = self.compute_histograms(self.grad_edges, self._bin_edges)
+        # self.histogram_middle = self.compute_histograms(self.grad_middle, self._bin_edges)
 
+    # ---------------- STATIC METHODS ----------------
     @staticmethod
-    def get_bin_edges(gradient_images: list, num_bins=200):
-        """Compute bin edges from multiple gradient sets."""
-        flattened = np.concatenate([img.flatten() for img in gradient_images])
+    def get_bin_edges(gradients: list, num_bins=200):
+        flattened = np.concatenate([g.flatten() for g in gradients])
         _, bin_edges = np.histogram(flattened, bins=num_bins)
         return bin_edges
 
     @staticmethod
-    def border_free(imgs: np.ndarray, border_size: int):
-        """Remove borders from the images."""
-        return imgs[:, border_size:-border_size, border_size:-border_size, :]
+    def compute_histograms(gradients: np.ndarray, bin_edges: np.ndarray):
+        return np.histogram(gradients, bins=bin_edges)[0]
 
     @staticmethod
     def wiener_entropy(hist: np.ndarray, eps=1e-12):
-        """Compute Wiener entropy for the histogram.(not flattened array)"""
         w = np.hanning(len(hist))
         X = np.fft.rfft(hist * w)
         P = np.abs(X) ** 2 + eps
@@ -91,208 +55,114 @@ class GradientUtils2D:
         arith_mean = np.mean(P)
         return 1.0 - float(geom_mean / (arith_mean + eps))
 
-    def _gradients_along_tile_grid(self, offset: int, channels=None):
-        """
-        Sample gradients along tile grid with optional channels.
+    # ----------------- PUBLIC METHODS -----------------
+    def make_bin_edges(self, n_bins=2000):
+        return self.get_bin_edges(list(self.gradients) + [self.grad_edges, self.grad_middle], num_bins=n_bins)
 
-        channels: int, list/tuple of ints, or None (all channels)
-        """
+    def get_peakiness_scores(histogram_edges, histogram_middle, eps=1e-12):
+        scores = []
+        for x in [histogram_edges, histogram_middle, histogram_middle - histogram_edges]:
+            scores.append(GradientUtils.wiener_entropy(x, eps=eps))
+        return scores
+
+    # ----------------- INTERNAL METHODS -----------------
+    def _normalize_gradients(self, gradients):
+        """Normalize gradients to the range [0, 1]."""
+        g_min = gradients.min()
+        g_max = gradients.max()
+        if g_max - g_min < 1e-12:
+            return np.zeros_like(gradients)
+        return (gradients - g_min) / (g_max - g_min)
+
+
+
+# ----------------- 2D IMPLEMENTATION -----------------
+class GradientUtils2D(GradientUtils):
+
+    @staticmethod
+    def border_free(imgs, border_size):
+        return imgs[:, border_size:-border_size, border_size:-border_size, :]
+
+    @staticmethod
+    def compute_gradients(imgs, border_size=0):
+        grad_x = imgs[:, :, 1:, :] - imgs[:, :, :-1, :]
+        grad_y = imgs[:, 1:, :, :] - imgs[:, :-1, :, :]
+        return grad_x, grad_y
+
+    def _gradients_along_tile_grid(self, offset, channels=None):
+        oy , ox = offset if isinstance(offset, (tuple, list, np.ndarray)) else (offset, offset)
+        tile_sz_y, tile_sz_x = self.tile_size if isinstance(self.tile_size, (tuple, list, np.ndarray)) else (self.tile_size, self.tile_size)
+        grad_x, grad_y = self.gradients
         if channels is None:
-            channels = list(range(self.gradients_x.shape[-1]))
+            grad_x_slice = grad_x[:, :, ox::tile_sz_x,:]
+            grad_y_slice = grad_y[:, oy::tile_sz_y, :,:]
         elif isinstance(channels, int):
-            channels = [channels]
-
-        grad_x_slice = self.gradients_x[:, :, offset::self.tile_size, channels]
-        grad_y_slice = self.gradients_y[:, offset::self.tile_size, :, channels]
-
+            grad_x_slice =  grad_x[:, :, ox::tile_sz_x, channels]
+            grad_y_slice = grad_y[:, oy::tile_sz_y, :, channels]
+        else:
+            raise ValueError("channels must be None or int")
         return np.concatenate([grad_x_slice.flatten(), grad_y_slice.flatten()])
 
-
     def get_gradients_at(self, position="edge", channels=None):
-        """
-        Get collection of absolute gradients sampled at specific tile positions.
-
-        position: "edge", "middle", or int (tile offset)
-        channels: int, list/tuple of ints, or None (all channels)
-        """
         if isinstance(position, str):
             position = position.lower()
             if position == "edge":
-                offset = self.tile_size - 1
+                offset = self.tile_size - 1 
             elif position == "middle":
                 offset = self.tile_size // 2 - 1
             else:
-                raise ValueError("position must be 'edge', 'middle', or an integer")
+                raise ValueError("position must be 'edge' or 'middle'")
         elif isinstance(position, int):
             offset = position
         else:
-            raise TypeError("position must be a string or integer")
-
-        return self._gradients_along_tile_grid(offset, channels=channels)
-
+            raise TypeError("position must be string or int")
+        return self._gradients_along_tile_grid(offset, channels)
 
 
-    def get_peakiness_scores(self, histogram_edges, histogram_middle, eps=1e-12):
-        """Compute peakiness scores using Wiener entropy."""
-        scores = []
-        for x in [histogram_edges,
-                  histogram_middle,
-                  histogram_middle - histogram_edges]:
-            scores.append(GradientUtils2D.wiener_entropy(x, eps=eps))
-        return scores
-class GradientUtils3D:
-    """
-    Class to compute 3D tiling statistics such as gradient histograms and peakiness scores
-    for volumetric images (shape: [B, Z, Y, X, C]).
-    """
+# ----------------- 3D IMPLEMENTATION -----------------
+class GradientUtils3D(GradientUtils):
 
-    def __init__(self, imgs: np.ndarray, tile_size=(9, 32, 32), border_size=None, bin_edges=None):
-        """
-        Initialize GradientUtils3D.
-
-        Args:
-            imgs (np.ndarray): 5D image array [B, Z, Y, X, C].
-            tile_size (tuple[int]): tile size along (Z, Y, X). e.g. (9, 32, 32)
-            border_size (tuple[int] or None): border width to ignore per axis.
-                                              Defaults to half of each tile_size.
-            bin_edges (np.ndarray or None): histogram bin edges.
-        """
-        self.imgs = imgs
-        self.tile_size = np.array(tile_size)
-        if border_size is None:
-            # self.border_size = self.tile_size // 2
-            self.border_size = [s//2 for s in self.tile_size]
-            self.border_size = [0, 16, 16]
-        else:
-            self.border_size = np.array(border_size)
-
-        # remove borders
-        self.imgs_wo_borders = GradientUtils3D.border_free(imgs, self.border_size)
-
-        # compute gradients along 3D axes
-        self.grad_z, self.grad_y, self.grad_x = GradientUtils3D.compute_gradients(imgs, self.border_size)
-
-        # gradients along tile grid
-        self.grad_edges = self._gradients_along_tile_grid(offset=self.tile_size - 1)
-        self.grad_middle = self._gradients_along_tile_grid(offset=self.tile_size // 2 - 1)
-
-        # compute bin edges if not provided
-        self._bin_edges = bin_edges
-        if self._bin_edges is None:
-            self._bin_edges = GradientUtils3D.get_bin_edges(
-                [self.grad_x, self.grad_y, self.grad_z, self.grad_edges, self.grad_middle],
-                num_bins=200
-            )
-
-        # histograms
-        self.histogram_edges = GradientUtils3D.compute_histograms(self.grad_edges, self._bin_edges)
-        self.histogram_middle = GradientUtils3D.compute_histograms(self.grad_middle, self._bin_edges)
-
-    # ---------- STATIC METHODS ----------
     @staticmethod
-    def border_free(imgs: np.ndarray, border_size):
-        """Remove borders from a 3D image [B, Z, Y, X, C]."""
+    def border_free(imgs, border_size):
         bz, by, bx = border_size
-
         z_slice = slice(bz, -bz if bz != 0 else None)
         y_slice = slice(by, -by if by != 0 else None)
         x_slice = slice(bx, -bx if bx != 0 else None)
-
         return imgs[:, z_slice, y_slice, x_slice, :]
 
     @staticmethod
-    def compute_gradients(imgs: np.ndarray, border_size):
-        """Compute 3D gradients along Z, Y, X for batch of volumes."""
+    def compute_gradients(imgs, border_size):
         wb = GradientUtils3D.border_free(imgs, border_size)
         grad_z = wb[:, 1:, :, :, :] - wb[:, :-1, :, :, :]
         grad_y = wb[:, :, 1:, :, :] - wb[:, :, :-1, :, :]
         grad_x = wb[:, :, :, 1:, :] - wb[:, :, :, :-1, :]
         return grad_z, grad_y, grad_x
 
-    @staticmethod
-    def get_bin_edges(gradient_volumes: list, num_bins=200):
-        """Compute bin edges from multiple 3D gradient arrays."""
-        flattened = np.concatenate([v.flatten() for v in gradient_volumes])
-        _, bin_edges = np.histogram(flattened, bins=num_bins)
-        return bin_edges
-
-    @staticmethod
-    def compute_histograms(gradients: np.ndarray, bin_edges: np.ndarray):
-        """Compute histogram for 3D gradient data."""
-        return np.histogram(gradients, bins=bin_edges)[0]
-
-    @staticmethod
-    def wiener_entropy(hist: np.ndarray, eps=1e-12):
-        """Compute Wiener entropy for histogram."""
-        w = np.hanning(len(hist))
-        X = np.fft.rfft(hist * w)
-        P = np.abs(X) ** 2 + eps
-        geom_mean = np.exp(np.mean(np.log(P)))
-        arith_mean = np.mean(P)
-        return 1.0 - float(geom_mean / (arith_mean + eps))
-
-    # ---------- INTERNAL METHODS ----------
-
     def _gradients_along_tile_grid(self, offset, channels=None):
-        """
-        Sample gradients along 3D tile grid.
-        offset: array-like of (z_offset, y_offset, x_offset)
-        """
         oz, oy, ox = offset
+        oz = 8 #!AMAN Hardcoded
         if channels is None:
-            channels = list(range(self.grad_x.shape[-1]))
+            channels = list(range(self.gradients[2].shape[-1]))
         elif isinstance(channels, int):
             channels = [channels]
 
-        grad_x_slice = self.grad_x[:, :, :, ox::self.tile_size[2], channels]
-        grad_y_slice = self.grad_y[:, :, oy::self.tile_size[1], :, channels]
-        grad_z_slice = self.grad_z[:, oz::self.tile_size[0], :, :, channels]
-
-        return np.concatenate([
-            grad_x_slice.flatten(),
-            grad_y_slice.flatten(),
-            grad_z_slice.flatten()
-        ])
-
-    # ---------- PUBLIC API ----------
-
-    def make_bin_edges(self, n_bins=2000):
-        """Create bin edges from gradient data."""
-        return GradientUtils3D.get_bin_edges(
-            [self.grad_x, self.grad_y, self.grad_z, self.grad_edges, self.grad_middle],
-            num_bins=n_bins
-        )
-
-    def get_peakiness_scores(self, histogram_edges, histogram_middle, eps=1e-12):
-        """Compute peakiness scores using Wiener entropy."""
-        scores = []
-        for x in [histogram_edges,
-                  histogram_middle,
-                  histogram_middle - histogram_edges]:
-            scores.append(GradientUtils3D.wiener_entropy(x, eps=eps))
-        return scores
+        grad_z, grad_y, grad_x = self.gradients
+        grad_x_slice = grad_x[:, :, :, ox::self.tile_size[2], channels]
+        grad_y_slice = grad_y[:, :, oy::self.tile_size[1], :, channels]
+        grad_z_slice = grad_z[:, oz::self.tile_size[0], :, :, channels]
+        return np.concatenate([grad_x_slice.flatten(), grad_y_slice.flatten(), grad_z_slice.flatten()])
 
     def get_gradients_at(self, position="edge", channels=None):
-        """
-        Get gradients sampled at specific tile positions.
-        position: 'edge', 'middle', int, or tuple/list of (z,y,x) offsets
-        """
         if isinstance(position, str):
             position = position.lower()
             if position == "edge":
-                offset = self.tile_size - 1
+                offset = self.tile_size - 1 
             elif position == "middle":
                 offset = self.tile_size // 2 - 1
             else:
-                raise ValueError("position must be 'edge', 'middle', int, or tuple of ints")
+                raise ValueError("position must be 'edge' or 'middle'")
         elif isinstance(position, int):
-            # Same offset in all dimensions
-            offset = np.array([position, position, position])
-        elif isinstance(position, (list, tuple, np.ndarray)):
-            offset = np.array(position)
+            offset = np.array([position] * 3)
         else:
-            raise TypeError("position must be string, int, or tuple/list of ints")
-
-        return self._gradients_along_tile_grid(offset, channels=channels)
-
-
+            offset = np.array(position)
+        return self._gradients_along_tile_grid(offset, channels)
